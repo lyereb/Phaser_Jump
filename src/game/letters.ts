@@ -1,0 +1,168 @@
+import { GameObjects, Scene } from 'phaser';
+
+const SHEET = 'letters';
+
+/** Yellow digits 0–9 on the second row of UI/letters.png. */
+const YELLOW_DIGITS = [
+    { x: 56, y: 241, w: 78, h: 98 },
+    { x: 174, y: 242, w: 56, h: 96 },
+    { x: 271, y: 241, w: 71, h: 96 },
+    { x: 377, y: 241, w: 71, h: 98 },
+    { x: 475, y: 242, w: 78, h: 96 },
+    { x: 583, y: 242, w: 70, h: 97 },
+    { x: 685, y: 241, w: 73, h: 98 },
+    { x: 789, y: 242, w: 71, h: 96 },
+    { x: 890, y: 241, w: 74, h: 98 },
+    { x: 992, y: 241, w: 75, h: 98 }
+];
+
+const TALLEST = 98;
+/** On-screen height of a full digit. */
+const DRAW_H = 96;
+const GAP = 8;
+
+const frameName = (digit: number) => `letter-yellow-${digit}`;
+
+/** Red-roof house on the icon row of UI/letters.png. */
+export const RETURN_FRAME = 'letter-return';
+const RETURN_ICON = { x: 861, y: 77, w: 128, h: 118 };
+
+/** Gold crown on the icon row of UI/letters.png, just left of the medal. */
+export const CROWN_FRAME = 'letter-crown';
+const CROWN_ICON = { x: 1189, y: 84, w: 133, h: 107 };
+
+export function loadLetterAssets (scene: Scene)
+{
+    scene.load.image(SHEET, 'UI/letters.png');
+}
+
+export function createLetterFrames (scene: Scene)
+{
+    const texture = scene.textures.get(SHEET);
+
+    YELLOW_DIGITS.forEach((region, digit) =>
+    {
+        const name = frameName(digit);
+
+        if (!texture.has(name))
+        {
+            texture.add(name, 0, region.x, region.y, region.w, region.h);
+        }
+    });
+
+    if (!texture.has(RETURN_FRAME))
+    {
+        texture.add(RETURN_FRAME, 0, RETURN_ICON.x, RETURN_ICON.y, RETURN_ICON.w, RETURN_ICON.h);
+    }
+
+    if (!texture.has(CROWN_FRAME))
+    {
+        texture.add(CROWN_FRAME, 0, CROWN_ICON.x, CROWN_ICON.y, CROWN_ICON.w, CROWN_ICON.h);
+    }
+}
+
+/** Height readout built from the yellow digits in letters.png. */
+export class MeterDigits
+{
+    private root: GameObjects.Container;
+    private glyphs: GameObjects.Image[] = [];
+    private drawWidth = 0;
+    private drawHeight: number;
+
+    constructor (scene: Scene, depth: number, options: { parent?: GameObjects.Container; height?: number } = {})
+    {
+        this.root = scene.add.container(0, 0).setScrollFactor(0).setDepth(depth);
+        this.drawHeight = options.height ?? DRAW_H;
+        options.parent?.add(this.root);
+    }
+
+    setPosition (x: number, y: number)
+    {
+        this.root.setPosition(x, y);
+    }
+
+    setVisible (visible: boolean)
+    {
+        this.root.setVisible(visible);
+    }
+
+    setValue (meters: number)
+    {
+        const text = String(Math.max(0, Math.floor(meters)));
+        const scene = this.root.scene;
+
+        while (this.glyphs.length < text.length)
+        {
+            const image = scene.add.image(0, 0, SHEET, frameName(0))
+                .setOrigin(0.5, 1)
+                .setScrollFactor(0);
+
+            this.root.add(image);
+            this.glyphs.push(image);
+        }
+
+        const scale = this.drawHeight / TALLEST;
+        const widths: number[] = [];
+
+        this.glyphs.forEach((image, index) =>
+        {
+            const used = index < text.length;
+
+            image.setVisible(used);
+
+            if (!used)
+            {
+                return;
+            }
+
+            image.setFrame(frameName(text.charCodeAt(index) - 48));
+            image.setScale(scale);
+            widths.push(image.displayWidth);
+        });
+
+        const total = widths.reduce((sum, width) => sum + width, 0) + GAP * Math.max(0, widths.length - 1);
+        this.drawWidth = total;
+        let cursor = -total / 2;
+
+        widths.forEach((width, index) =>
+        {
+            const image = this.glyphs[index];
+
+            image.x = cursor + width / 2;
+            image.y = this.drawHeight / 2;
+            cursor += width + GAP;
+        });
+    }
+
+    fitToWidth (width: number)
+    {
+        this.root.setScale(this.drawWidth > 0 ? Math.min(1, Math.max(1, width) / this.drawWidth) : 1);
+    }
+
+    /** A short pop when the shown height jumps. */
+    punch ()
+    {
+        const rest = this.root.scaleX;
+        const scene = this.root.scene;
+
+        scene.tweens.killTweensOf(this.root);
+        this.root.setScale(rest);
+        scene.tweens.add({
+            targets: this.root,
+            scaleX: rest * 1.16,
+            scaleY: rest * 1.16,
+            duration: 100,
+            yoyo: true,
+            ease: 'Quad.Out'
+        });
+    }
+
+    status ()
+    {
+        return {
+            x: this.root.x, y: this.root.y, width: this.drawWidth * this.root.scaleX,
+            height: this.drawHeight * this.root.scaleY, visible: this.root.visible,
+            frames: this.glyphs.filter(image => image.visible).map(image => image.frame.name)
+        };
+    }
+}

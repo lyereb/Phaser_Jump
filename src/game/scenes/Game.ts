@@ -1,0 +1,1573 @@
+import { Math as PhaserMath, Scene, TintModes } from 'phaser';
+import { pauseBgm, playSfx, resumeBgm, startBgm, stopBgm } from '../audio';
+import { BoxSkinCollection } from '../boxSkins';
+import { Checkpoints } from '../checkpoints';
+import { DebugPanel } from '../debugPanel';
+import { difficultyForMeters, difficultySpeedScale } from '../difficulty';
+import { CoinHud, CoinWallet } from '../coinHud';
+import { GameHud } from '../gameHud';
+import { ItemEffects } from '../itemEffects';
+import { RankChaseHud } from '../rankChaseHud';
+import { getWeeklyLeaderboard } from '../leaderboardContext';
+import { rollCoinReward, rollItemKind, ShieldCharge, SpeedBoost, SPRING_STACK_COUNT, type ItemKind } from '../itemRules';
+import { springDeliveryProgress, springTrajectory, SPRING_HEIGHT_BOXES } from '../springFlight';
+import { MeterDigits } from '../letters';
+import { ReturnButton } from '../returnButton';
+import { StarBurst } from '../stars';
+import { bindResize } from '../layout';
+import { AltitudeBackground } from '../altitudeBackground';
+import { PLAYER_ART_FEET, PLAYER_ART_HEIGHT, PLAYER_ART_TOP, PLAYER_HIT_ANIM, PLAYER_IDLE_ANIM, PLAYER_JUMP_ANIM } from '../player';
+import { RETURN_CONFIRM_SCENE } from './ReturnConfirmation';
+import type { RoundSummary } from './GameOver';
+
+const STEP_MS = 8;
+/** Landing squash: a little wider and shorter, then spring back past rest. */
+const SQUASH_X = 1.14;
+const SQUASH_Y = 0.72;
+const SQUASH_IN_MS = 70;
+const SQUASH_OUT_MS = 260;
+/** Camera starts following once the character reaches this screen position. */
+const CAMERA_FOLLOW_SCREEN_Y = 0.5;
+/** Let the fall finish off-screen, then wait before touching the camera. */
+const FAILURE_OVERVIEW_DELAY_MS = 1000;
+/** Pull the whole tower into one screen, then hold before the result. */
+const OVERVIEW_ZOOM_MS = 900;
+const OVERVIEW_HOLD_MS = 1000;
+/** Each opening number: pop in, hold, then leave before the next. */
+const COUNTDOWN_NUMBERS = [ 3, 2, 1 ] as const;
+const COUNTDOWN_IN_MS = 220;
+const COUNTDOWN_HOLD_MS = 620;
+const COUNTDOWN_OUT_MS = 160;
+
+const COLOR_BG = 0xf7d5e4;
+
+type Phase = 'play' | 'dead' | 'over';
+
+/** `node` is the invisible hitbox; `sprite` is drawn with its feet on the hitbox bottom. */
+type Actor = {
+    node: Phaser.GameObjects.Rectangle;
+    sprite: Phaser.GameObjects.Sprite;
+    vx: number;
+    vy: number;
+};
+
+type Box = {
+    x: number;
+    y: number;
+    displayWidth: number;
+    displayHeight: number;
+};
+
+/**
+ * Collision area inside a block texture, in source pixels.
+ * `surface` is the line on the top face where feet stand.
+ * The next box covers the top of that lid and leaves the lower rim showing.
+ * Jump height must stay above the scaled `bottom - surface`, otherwise the character cannot clear a sliding block.
+ */
+type BlockArt = {
+    key: string;
+    scaleX: number;
+    scaleY: number;
+    left: number;
+    right: number;
+    surface: number;
+    bottom: number;
+};
+
+/** Grass strip. Collision is only the top skin; the drawing continues down to fill the screen. */
+const BASE_FRAME_W = 1024;
+const BASE_SURFACE_PX = 14;
+/** Last dirt pixel in base.png. The strip from the grass to here sits on the bottom of the screen. */
+const BASE_DIRT_BOTTOM_PX = 243;
+/** Share of the screen used by that strip, measured from the reference frame. */
+const BASE_SCREEN_FRACTION = 0.136;
+const BASE_ART: BlockArt = {
+    key: 'block-base',
+    scaleX: 1,
+    scaleY: 1,
+    left: 16,
+    right: BASE_FRAME_W - 16,
+    surface: BASE_SURFACE_PX,
+    bottom: BASE_SURFACE_PX + 32
+};
+/** Lid and body measured on mover_normal.png. Scale stays under the jump so a block can be cleared. */
+const MOVER_ART: BlockArt = {
+    key: 'block-mover',
+    scaleX: 0.64,
+    scaleY: 0.64,
+    left: 8,
+    right: 248,
+    surface: 32,
+    bottom: 166
+};
+/**
+ * Source row on the lower box where the next box's bottom sits.
+ * That covers the lid's top outline and leaves the lower rim and its side edges showing.
+ */
+const MOVER_LID_BOTTOM_PX = 50;
+const ITEM_ART: Record<ItemKind, BlockArt> = {
+    normal: MOVER_ART,
+    coin: { ...MOVER_ART, key: 'block-coin' },
+    shield: { ...MOVER_ART, key: 'block-shield' },
+    spring: { ...MOVER_ART, key: 'block-spring' },
+    speed: { ...MOVER_ART, key: 'block-speed' }
+};
+/** Opaque span of mover_normal.png. */
+const BOX_VISUAL_TOP = 29;
+const BOX_VISUAL_BOTTOM = 167;
+const BOX_VISUAL_LEFT = 5;
+const BOX_VISUAL_RIGHT = 252;
+const BOX_VISUAL_H = (BOX_VISUAL_BOTTOM - BOX_VISUAL_TOP) * MOVER_ART.scaleY;
+/** Opaque bar inside mover_pallet.png (2048×154). Thin enough to sit under a box. */
+const PALLET_FRAME_W = 2048;
+const PALLET_FRAME_H = 154;
+const PALLET_LEFT = 73;
+const PALLET_RIGHT = 1974;
+const PALLET_TOP = 35;
+const PALLET_SCALE = (BOX_VISUAL_H * 0.14) / 86;
+/**
+ * Starting feel. The debug panel can still change these during a round.
+ * Height is in box heights. Speeds are world pixels per second.
+ */
+const PLAYER_TO_BOX = 1.33;
+const JUMP_BOXES = 1.5;
+const RISE_SPEED = 500;
+const FALL_SPEED = 420;
+const BOARD_SPEED = 398;
+/** A box counts as centred when its collision centre is this close to the stack column. */
+const CENTER_TOLERANCE = 8;
+const PLAYER_H = BOX_VISUAL_H * PLAYER_TO_BOX;
+const PLAYER_W = PLAYER_H * 0.45;
+const PLAYER_SCALE = PLAYER_H / (PLAYER_ART_FEET - PLAYER_ART_TOP);
+const BASE_SURFACE_Y = 1000;
+const DEPTH_BACKGROUND = -1;
+const DEPTH_PLAYER = 1000;
+const DEPTH_UI = 2000;
+/** An ordinary land. A perfect land starts at 2 and climbs by 1 while the streak holds, up to 5. */
+const NORMAL_METERS = 1;
+const PERFECT_METERS_MAX = 5;
+
+type Block = {
+    node: Phaser.GameObjects.Image;
+    art: BlockArt;
+    vx: number;
+    vy: number;
+    moving: boolean;
+    item: ItemKind;
+    itemConsumed: boolean;
+    /** Captured on spawn so the fifth boosted mover stays fast even with zero charges left. */
+    speedMultiplier: number;
+    /** Height tier rolled when this box appeared. Separate from the speed-box item. */
+    difficultyScale: number;
+};
+
+type SpringDelivery = {
+    block: Block;
+    targetX: number;
+    targetY: number;
+    startX: number;
+    startY: number;
+};
+
+type SpringFlight = {
+    elapsed: number;
+    launchSurface: number;
+    landingSurface: number;
+    columnX: number;
+    deliveries: SpringDelivery[];
+};
+
+export class Game extends Scene
+{
+    private background: Phaser.GameObjects.Container;
+    private altitudeBackground: AltitudeBackground;
+    private player: Actor;
+    private stack: Block[] = [];
+    private mover: Block | null = null;
+    /** Board under the box that is being delivered. Null once that board slides back out. */
+    private pallet: Phaser.GameObjects.Image | null = null;
+    /** +1 when the board trails to the left, -1 when it trails to the right. */
+    private palletSign = 1;
+    private support: Block;
+    private grounded = true;
+    private prevBottom = 0;
+    private phase: Phase = 'play';
+    /** True until the opening 3-2-1 finishes. Jumps and the first box wait. */
+    private awaitingStart = true;
+    private startToken = 0;
+    private countdownText: Phaser.GameObjects.Text;
+    private accumulator = 0;
+    private hint: Phaser.GameObjects.Text;
+    private speedText: Phaser.GameObjects.Text;
+    private settlementShown = false;
+    private roundStartCoins = 0;
+    private perfectBoxes = 0;
+    private hud: GameHud;
+    private chaseHud: RankChaseHud;
+    private heightText: MeterDigits;
+    private starBurst: StarBurst;
+    private checkpoints: Checkpoints;
+    private wallet: CoinWallet;
+    private skins: BoxSkinCollection;
+    private coinHud: CoinHud;
+    private itemEffects: ItemEffects;
+    private shieldCharge = new ShieldCharge();
+    private speedBoost = new SpeedBoost();
+    private springFlight: SpringFlight | null = null;
+    private springWasPerfect = false;
+    private forcedItem: ItemKind | null = null;
+    private springFlightsCompleted = 0;
+    private debugPanel: DebugPanel;
+    private returnConfirmationOpen = false;
+    private returnPausedMusic = false;
+    private anchorX = 0;
+    private cameraFocusY = 0;
+    private cameraLocked = true;
+    private lockedScrollY = 0;
+    private failureDropComplete = false;
+    private overviewDelayTimer?: Phaser.Time.TimerEvent;
+    private overviewStarted = false;
+    private overviewHoldScheduled = false;
+    private overviewFrame = { zoom: 1, scrollX: 0, scrollY: 0 };
+    /** Box heights of the hop. The debug panel changes this live. */
+    private jumpBoxes = JUMP_BOXES;
+    /** Average upward speed, in world pixels per second. */
+    private risePx = RISE_SPEED;
+    /** Average downward speed over the same height, in world pixels per second. */
+    private fallPx = FALL_SPEED;
+    /** Box slide speed, in world pixels per second. */
+    private boardPx = BOARD_SPEED;
+    /** Height shown on the score. Ordinary lands add 1. Perfect streaks add 2, then 3, 4 and 5. */
+    private heightMeters = 0;
+    /** How many perfect lands are in a row. A miss sets this back to 0. */
+    private perfectStreak = 0;
+
+    constructor ()
+    {
+        super('Game');
+    }
+
+    get returnButton (): ReturnButton
+    {
+        return this.hud.returnButton;
+    }
+
+    create ()
+    {
+        this.stack = [];
+        this.mover = null;
+        this.pallet = null;
+        this.grounded = true;
+        this.phase = 'play';
+        this.awaitingStart = true;
+        this.startToken++;
+        this.accumulator = 0;
+        this.settlementShown = false;
+        this.perfectBoxes = 0;
+        this.cameraLocked = true;
+        this.failureDropComplete = false;
+        this.overviewDelayTimer?.remove(false);
+        this.overviewDelayTimer = undefined;
+        this.overviewStarted = false;
+        this.overviewHoldScheduled = false;
+        this.cameras.main.setZoom(1);
+        this.heightMeters = 0;
+        this.perfectStreak = 0;
+        this.shieldCharge.reset();
+        this.speedBoost.reset();
+        this.springFlight = null;
+        this.springWasPerfect = false;
+        this.forcedItem = null;
+        this.springFlightsCompleted = 0;
+        this.returnConfirmationOpen = false;
+        this.returnPausedMusic = false;
+
+        this.cameras.main.setBackgroundColor(COLOR_BG);
+        this.cameras.main.roundPixels = true;
+
+        this.altitudeBackground = new AltitudeBackground(this, DEPTH_BACKGROUND);
+        this.background = this.altitudeBackground.root;
+
+        const base = this.createBlock({ ...BASE_ART }, false);
+
+        this.stack.push(base);
+        this.support = base;
+
+        const playerNode = this.add.rectangle(this.body(base).x, 0, PLAYER_W, PLAYER_H).setVisible(false);
+        const playerSprite = this.add.sprite(0, 0, 'player-idle-0')
+            .setOrigin(0.5, PLAYER_ART_FEET / PLAYER_ART_HEIGHT)
+            .setScale(PLAYER_SCALE)
+            .setDepth(DEPTH_PLAYER);
+
+        this.player = { node: playerNode, sprite: playerSprite, vx: 0, vy: 0 };
+        this.groundOn(base);
+        this.syncPlayerSprite();
+
+        this.hint = this.add.text(0, 0, '点击屏幕\n跳盒子', {
+            fontFamily: '"Microsoft YaHei", Arial, sans-serif',
+            fontSize: 58,
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#c45b86',
+            strokeThickness: 8,
+            align: 'center',
+            lineSpacing: 8
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 2).setVisible(false);
+
+        this.countdownText = this.add.text(0, 0, '', {
+            fontFamily: '"Microsoft YaHei", Arial, sans-serif',
+            fontSize: 168,
+            fontStyle: 'bold',
+            color: '#fffdf6',
+            stroke: '#e4572e',
+            strokeThickness: 16,
+            align: 'center',
+            padding: { x: 28, y: 28 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI + 2).setVisible(false);
+
+        this.speedText = this.add.text(0, 0, '', {
+            fontFamily: '"Microsoft YaHei", Arial, sans-serif',
+            fontSize: 24, fontStyle: 'bold', color: '#fff2e6',
+            stroke: '#b42a3f', strokeThickness: 5
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH_UI).setVisible(false);
+
+        this.heightText = new MeterDigits(this, DEPTH_UI);
+        this.starBurst = new StarBurst(this, DEPTH_PLAYER + 1);
+        this.checkpoints = new Checkpoints(this, DEPTH_PLAYER + 10);
+        this.wallet ??= new CoinWallet(import.meta.env.DEV ? this.registry.get('coinStorageKey') : undefined);
+        this.skins = new BoxSkinCollection(import.meta.env.DEV ? this.registry.get('skinStorageKey') : undefined);
+        this.roundStartCoins = this.wallet.total;
+        this.hud = new GameHud(this, DEPTH_UI, () => this.openReturnConfirmation());
+        this.coinHud = this.hud.coinHud;
+        this.coinHud.setValue(this.wallet.total);
+        this.chaseHud = new RankChaseHud(this, DEPTH_UI + 1, getWeeklyLeaderboard(this), () => this.meters());
+        this.updateHeight();
+        this.itemEffects = new ItemEffects(this, DEPTH_PLAYER + 6, PLAYER_W, PLAYER_H, DEPTH_UI + 8);
+        this.debugPanel = new DebugPanel(this, DEPTH_UI + 3);
+
+        this.anchorX = this.body(base).x;
+        this.addTuneControls();
+        this.debugPanel.addButton('测试Checkpoint', () =>
+        {
+            this.checkpoints.preview(this.anchorX, this.cameras.main.scrollY + this.scale.height * 0.38);
+            this.time.delayedCall(0, () => this.debugPanel.close());
+        });
+        for (const [ kind, label ] of [ [ 'coin', '生成金币盒' ], [ 'shield', '生成护盾盒' ], [ 'spring', '生成弹簧盒' ], [ 'speed', '生成加速盒' ] ] as const)
+        {
+            this.debugPanel.addButton(label, () =>
+            {
+                this.forceItem(kind);
+                this.time.delayedCall(0, () => this.debugPanel.close());
+            });
+        }
+        this.layout();
+        this.followCamera(true);
+        this.beginCountdown();
+        startBgm(this);
+
+        this.input.on('pointerdown', this.onPointerDown, this);
+        this.events.once('shutdown', () =>
+        {
+            this.startToken++;
+            this.tweens.killTweensOf(this.countdownText);
+            this.altitudeBackground.destroy();
+            this.input.off('pointerdown', this.onPointerDown, this);
+            this.overviewDelayTimer?.remove(false);
+            this.overviewDelayTimer = undefined;
+            if (this.returnConfirmationOpen)
+            {
+                this.returnConfirmationOpen = false;
+                this.scene.stop(RETURN_CONFIRM_SCENE);
+            }
+        });
+
+        bindResize(this, () =>
+        {
+            this.layout();
+
+            if (this.overviewStarted)
+            {
+                this.frameTower(true);
+            }
+            else if (this.cameraLocked && this.phase === 'play')
+            {
+                this.followCamera(true);
+            }
+        });
+    }
+
+    update (_time: number, delta: number)
+    {
+        if (this.returnConfirmationOpen || this.settlementShown) return;
+        this.accumulator += Math.min(delta, 48);
+
+        while (this.accumulator >= STEP_MS)
+        {
+            this.simulate(STEP_MS / 1000);
+            this.accumulator -= STEP_MS;
+        }
+
+        this.syncPlayerSprite();
+
+        if (this.phase === 'play')
+        {
+            this.followCamera(false);
+            this.checkpoints.layout();
+            this.altitudeBackground.update(this.meters(), delta);
+        }
+    }
+
+    private simulate (dt: number)
+    {
+        if (this.returnConfirmationOpen || this.settlementShown) return;
+        if (this.springFlight && this.phase === 'play')
+        {
+            this.simulateSpring(dt);
+            this.syncMoverSpeed();
+            return;
+        }
+        const player = this.player;
+
+        this.prevBottom = this.bottom(player.node);
+
+        if (!this.grounded && !this.failureDropComplete)
+        {
+            player.vy += this.gravity(player.vy < 0) * dt;
+            player.node.y += player.vy * dt;
+            player.node.x += player.vx * dt;
+        }
+        else if (this.grounded)
+        {
+            player.vx = 0;
+            player.vy = 0;
+            player.node.y = this.top(this.body(this.support)) - player.node.displayHeight / 2;
+        }
+
+        if (this.mover?.moving && this.mover.vx !== 0)
+        {
+            const center = this.anchorX;
+            const before = this.body(this.mover).x;
+
+            this.mover.node.x += this.mover.vx * dt;
+
+            const after = this.body(this.mover).x;
+
+            if ((before - center) * (after - center) <= 0)
+            {
+                this.placeBlock(this.mover, center, this.stackBottom(this.support));
+                this.mover.vx = 0;
+            }
+            else if (this.phase === 'play' && this.passed(this.mover))
+            {
+                this.mover.node.destroy();
+                this.pallet?.destroy();
+                this.pallet = null;
+                this.mover = null;
+                this.spawnMover();
+            }
+        }
+
+        if (this.mover?.moving)
+        {
+            this.syncPallet();
+        }
+
+        if (this.phase === 'play')
+        {
+            this.observeCheckpoint();
+            this.resolve();
+        }
+
+        this.syncMoverSpeed(dt);
+
+        if (this.phase === 'dead')
+        {
+            this.observeFailureDrop();
+        }
+    }
+
+    private resolve ()
+    {
+        const mover = this.mover;
+
+        if (mover?.moving)
+        {
+            if (this.tryLand(mover))
+            {
+                return;
+            }
+
+            if (this.intersects(this.player.node, this.body(mover)))
+            {
+                if (this.shieldCharge.consume())
+                {
+                    this.deflectWithShield(mover);
+                }
+                else
+                {
+                    this.fly(mover.vx);
+                }
+                return;
+            }
+        }
+
+        if (!this.grounded)
+        {
+            this.tryLandOnSupport();
+        }
+
+        if (!this.grounded && this.bottom(this.player.node) > this.bottom(this.body(this.support)) + 36)
+        {
+            this.phase = 'dead';
+            this.altitudeBackground?.freeze();
+            this.hint.setVisible(false);
+            this.player.sprite.play(PLAYER_HIT_ANIM);
+            playSfx(this, 'fail');
+        }
+    }
+
+    private tryLand (block: Block)
+    {
+        if (this.grounded || this.player.vy < 0)
+        {
+            return false;
+        }
+
+        const overlap = this.xOverlap(this.player.node, this.body(block));
+        const surface = this.top(this.body(block));
+        const feet = this.bottom(this.player.node);
+        const crossed = this.prevBottom <= surface + 8 && feet >= surface - 1;
+
+        if (!crossed || overlap < this.player.node.displayWidth * 0.5)
+        {
+            return false;
+        }
+
+        const perfect = this.isCentered(block) && this.isCentered(this.support);
+
+        block.moving = false;
+        block.vx = 0;
+        block.vy = 0;
+        this.releasePallet();
+        this.mover = null;
+        this.syncMoverSpeed();
+        this.stack.push(block);
+        this.squash(block);
+        if (block.item !== 'spring') this.celebrate(block, perfect);
+        else playSfx(this, 'item');
+
+        if (perfect)
+        {
+            this.flashPerfect(block);
+        }
+        // A spring is one fixed +10m action, including this activation landing.
+        const gained = this.scoreLand(perfect, block.item !== 'spring');
+
+        this.updateHeight();
+        this.groundOn(block);
+        this.activateItem(block, perfect);
+        this.updateSpeedStatus();
+        this.spawnMover();
+
+        if (perfect && gained > 0)
+        {
+            this.itemEffects.popScore(this.player.node.x, this.player.node.y - PLAYER_H * 0.9, gained, true);
+            this.heightText.punch();
+        }
+
+        return true;
+    }
+
+    private tryLandOnSupport ()
+    {
+        const support = this.body(this.support);
+        const surface = this.top(support);
+        const feet = this.bottom(this.player.node);
+        const crossed = this.prevBottom <= surface + 8 && feet >= surface - 1;
+        const overlap = this.xOverlap(this.player.node, support);
+
+        if (this.player.vy >= 0 && crossed && overlap >= this.player.node.displayWidth * 0.5)
+        {
+            this.perfectStreak = 0;
+            this.squash(this.support);
+            playSfx(this, 'land');
+            this.starBurst.burst(this.player.node.x, this.top(support));
+            this.groundOn(this.support);
+            this.prepareCheckpoint();
+        }
+    }
+
+    /** Ground is the centred base. A mover is centred only when it stopped on the stack column. */
+    private isCentered (block: Block)
+    {
+        if (block.art.key === BASE_ART.key)
+        {
+            return true;
+        }
+
+        return Math.abs(this.body(block).x - this.anchorX) <= CENTER_TOLERANCE;
+    }
+
+    /** The landed box flashes white and gives a short, light shake. */
+    private flashPerfect (block: Block)
+    {
+        const node = block.node;
+        const restX = node.x;
+        const nudge = 4;
+        const restore = () =>
+        {
+            if (node.scene)
+            {
+                node.x = restX;
+            }
+        };
+
+        node.setTint(0xffffff).setTintMode(TintModes.FILL);
+        this.time.delayedCall(120, () =>
+        {
+            if (node.scene)
+            {
+                node.clearTint();
+            }
+        });
+
+        this.tweens.add({
+            targets: node,
+            x: restX + nudge,
+            duration: 28,
+            yoyo: true,
+            repeat: 2,
+            ease: 'Sine.InOut',
+            onComplete: restore,
+            onStop: restore
+        });
+    }
+
+    /** Camera thud. `pixels` is the vertical kick, kept similar on wide and narrow screens. */
+    private thud (pixels: number, duration: number)
+    {
+        const width = Math.max(1, this.scale.width);
+        const height = Math.max(1, this.scale.height);
+
+        this.cameras.main.shake(duration, new PhaserMath.Vector2(pixels * 0.35 / width, pixels / height));
+    }
+
+    private celebrate (block: Block, perfect = false)
+    {
+        const x = this.player.node.x;
+        const y = this.top(this.body(block));
+
+        playSfx(this, block.item === 'normal' ? 'land' : 'item');
+        if (perfect && block.item === 'normal') playSfx(this, 'perfect');
+        this.starBurst.burst(x, y);
+    }
+
+    private openReturnConfirmation ()
+    {
+        if (this.returnConfirmationOpen || this.settlementShown || !this.scene.isActive()) return;
+        this.returnConfirmationOpen = true;
+        this.debugPanel.close();
+        playSfx(this, 'ui');
+        this.returnPausedMusic = pauseBgm(this);
+        this.scene.launch(RETURN_CONFIRM_SCENE, {
+            meters: this.meters(),
+            onContinue: () =>
+            {
+                this.returnConfirmationOpen = false;
+                this.accumulator = 0;
+                // Phaser's TweenManager uses a wall clock: resync it without stepping any tween.
+                // Otherwise a short dialog could fast-forward particles on the first resumed frame.
+                this.tweens.getDelta(true);
+                this.scene.resume();
+                if (this.returnPausedMusic) resumeBgm(this);
+                this.returnPausedMusic = false;
+            },
+            onReturn: () =>
+            {
+                this.returnConfirmationOpen = false;
+                this.returnPausedMusic = false;
+                stopBgm(this);
+                this.scene.start('MainMenu');
+            }
+        });
+        this.scene.pause();
+    }
+
+    private onPointerDown (pointer: Phaser.Input.Pointer)
+    {
+        if (this.returnConfirmationOpen || this.settlementShown || this.scene.isPaused()) return;
+        if (pointer.button !== undefined && pointer.button !== 0)
+        {
+            return;
+        }
+
+        // HUD buttons opt out with setInteractive() and setData('ui', true).
+        const overUi = this.input.hitTestPointer(pointer).some(obj => obj.getData('ui') === true);
+
+        if (overUi || this.awaitingStart)
+        {
+            return;
+        }
+
+        if (this.phase !== 'play' || !this.grounded)
+        {
+            return;
+        }
+
+        this.grounded = false;
+        this.player.vy = -2 * this.risePx;
+        this.player.node.y -= 2;
+        this.player.sprite.play(PLAYER_JUMP_ANIM);
+        this.hint.setVisible(false);
+        this.prepareCheckpoint();
+    }
+
+    private fly (dir: number)
+    {
+        const sign = dir === 0 ? 1 : Math.sign(dir);
+
+        this.phase = 'dead';
+        this.altitudeBackground?.freeze();
+        this.grounded = false;
+        this.hint.setVisible(false);
+        this.player.vx = sign * 540;
+        this.player.vy = -360;
+        this.player.sprite.play(PLAYER_HIT_ANIM);
+        playSfx(this, 'fail');
+        this.syncMoverSpeed();
+    }
+
+    /** Pins the image bottom and compresses the board, then springs it back. */
+    private squash (block: Block)
+    {
+        const node = block.node;
+        const { art } = block;
+        const frame = node.frame;
+        const bottom = node.y + frame.height * node.scaleY / 2;
+        const restY = bottom - frame.height * art.scaleY / 2;
+
+        this.tweens.killTweensOf(node);
+
+        this.tweens.add({
+            targets: node,
+            scaleX: art.scaleX * SQUASH_X,
+            scaleY: art.scaleY * SQUASH_Y,
+            y: bottom - frame.height * art.scaleY * SQUASH_Y / 2,
+            duration: SQUASH_IN_MS,
+            ease: 'Quad.Out',
+            onComplete: () =>
+            {
+                this.tweens.add({
+                    targets: node,
+                    scaleX: art.scaleX,
+                    scaleY: art.scaleY,
+                    y: restY,
+                    duration: SQUASH_OUT_MS,
+                    ease: 'Back.Out',
+                    onComplete: () =>
+                    {
+                        node.setScale(art.scaleX, art.scaleY);
+                        node.y = restY;
+                    }
+                });
+            }
+        });
+    }
+
+    private groundOn (block: Block)
+    {
+        this.support = block;
+        this.grounded = true;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.player.node.y = this.top(this.body(block)) - this.player.node.displayHeight / 2;
+        this.player.sprite.play(PLAYER_IDLE_ANIM);
+    }
+
+    private syncPlayerSprite ()
+    {
+        const { node, sprite } = this.player;
+
+        sprite.setPosition(node.x, this.bottom(node));
+        this.itemEffects?.update(node.x, node.y, this.shieldCharge.active);
+    }
+
+    /** Freeze the opening jump and the first box until 3, 2, 1 has finished. */
+    private beginCountdown ()
+    {
+        this.hint.setVisible(true);
+        // create() runs while the scene status is still CREATING, so isActive() is false here.
+        this.playCountdownBeat(0, this.startToken, true);
+    }
+
+    private playCountdownBeat (index: number, token: number, starting = false)
+    {
+        if (token !== this.startToken || (!starting && !this.scene.isActive())) return;
+
+        const text = this.countdownText;
+        const number = COUNTDOWN_NUMBERS[index];
+
+        this.tweens.killTweensOf(text);
+        text.setText(String(number)).setVisible(true).setAlpha(1).setScale(1.55);
+        playSfx(this, 'ui');
+        this.tweens.add({
+            targets: text,
+            scale: 1,
+            duration: COUNTDOWN_IN_MS,
+            ease: 'Back.Out',
+            onComplete: () =>
+            {
+                if (token !== this.startToken || !this.scene.isActive()) return;
+                this.time.delayedCall(COUNTDOWN_HOLD_MS, () =>
+                {
+                    if (token !== this.startToken || !this.scene.isActive()) return;
+                    this.tweens.add({
+                        targets: text,
+                        alpha: 0,
+                        scale: 1.28,
+                        duration: COUNTDOWN_OUT_MS,
+                        ease: 'Quad.In',
+                        onComplete: () =>
+                        {
+                            if (token !== this.startToken || !this.scene.isActive()) return;
+                            const next = index + 1;
+                            if (next < COUNTDOWN_NUMBERS.length)
+                            {
+                                this.playCountdownBeat(next, token);
+                                return;
+                            }
+                            text.setVisible(false);
+                            this.hint.setVisible(false);
+                            this.awaitingStart = false;
+                            if (!this.mover) this.spawnMover();
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    private spawnMover (replacementMultiplier?: number, difficultyScale?: number)
+    {
+        if (this.phase !== 'play' || this.mover || this.springFlight)
+        {
+            return;
+        }
+
+        this.prepareCheckpoint();
+        const fromLeft = Math.random() < 0.5;
+        const support = this.support;
+        const kind = this.forcedItem ?? rollItemKind();
+        this.forcedItem = null;
+        // Roll items first: cosmetics share only the ordinary 90% and cannot displace a special.
+        const art = kind === 'normal' ? { ...MOVER_ART, key: this.skins.rollTexture() } : ITEM_ART[kind];
+        const block = this.createBlock(art, true, kind);
+        const half = (block.art.right - block.art.left) * block.art.scaleX / 2;
+        const viewLeft = this.cameras.main.scrollX;
+        const viewRight = viewLeft + this.scale.width;
+        const spawnX = fromLeft ? viewLeft - half - 24 : viewRight + half + 24;
+
+        this.placeBlock(block, spawnX, this.stackBottom(support));
+        block.node.setDepth(this.stack.length + 1);
+        // Only ordinary incoming movers consume charges; spring deliveries use createBlock directly.
+        block.speedMultiplier = replacementMultiplier ?? this.speedBoost.consumeMover();
+        block.difficultyScale = difficultyScale ?? difficultySpeedScale(difficultyForMeters(this.heightMeters));
+        block.vx = (fromLeft ? 1 : -1) * this.boardPx * block.difficultyScale * block.speedMultiplier;
+        this.mover = block;
+        this.palletSign = fromLeft ? 1 : -1;
+        this.pallet = this.add.image(0, 0, 'block-pallet');
+        this.syncPallet();
+        this.updateSpeedStatus();
+        this.syncMoverSpeed();
+    }
+
+    /** Speed visuals use the box snapshot, not remaining charges or the texture kind. */
+    private syncMoverSpeed (dt = 0)
+    {
+        const mover = this.mover;
+
+        if (this.phase !== 'play' || !mover?.moving || mover.speedMultiplier <= 1 || mover.vx === 0)
+        {
+            this.itemEffects.moverSpeed(null);
+            return;
+        }
+
+        const box = this.body(mover);
+
+        this.itemEffects.moverSpeed({
+            x: box.x, y: box.y, width: box.displayWidth, height: box.displayHeight,
+            vx: mover.vx, depth: mover.node.depth
+        }, dt);
+    }
+
+    /** The next checkpoint is present from the start, projected from its fixed metre value. */
+    private prepareCheckpoint ()
+    {
+        this.checkpoints.prepare(
+            this.meters(), this.anchorX, this.top(this.body(this.support)),
+            PLAYER_H, BOX_VISUAL_H * this.jumpBoxes, BOX_VISUAL_H
+        );
+    }
+
+    private observeCheckpoint ()
+    {
+        const node = this.player.node;
+        if (!this.checkpoints.observePlayer(node.x, node.y, node.displayWidth, node.displayHeight)) return;
+        this.prepareCheckpoint();
+        const flight = this.springFlight;
+        if (flight)
+        {
+            this.checkpoints.prepareLeap(this.meters(), SPRING_STACK_COUNT, flight.columnX, flight.launchSurface, PLAYER_H, BOX_VISUAL_H * SPRING_HEIGHT_BOXES);
+        }
+    }
+
+    /** Consume the item only when landing on a new box, never on the old support. */
+    private activateItem (block: Block, perfect: boolean)
+    {
+        if (block.itemConsumed || block.item === 'normal') return;
+        block.itemConsumed = true;
+        const x = this.player.node.x;
+        const y = this.top(this.body(block));
+
+        if (block.item === 'coin')
+        {
+            const amount = rollCoinReward(perfect);
+
+            this.coinHud.setValue(this.wallet.add(amount));
+            this.itemEffects.coins(
+                x, y - PLAYER_H, amount, perfect,
+                () => this.coinHud.iconCenter(),
+                () => this.coinHud.pulse()
+            );
+            playSfx(this, 'coin');
+        }
+        else if (block.item === 'shield')
+        {
+            this.shieldCharge.grant();
+            this.itemEffects.shieldGranted(x, this.player.node.y);
+            playSfx(this, 'shield');
+        }
+        else if (block.item === 'speed')
+        {
+            this.speedBoost.grant();
+            this.itemEffects.toast(x, y - PLAYER_H, '后续 5 盒加速 +30%', '#ffc0b8');
+            playSfx(this, 'speed');
+        }
+        else if (block.item === 'spring')
+        {
+            this.startSpringFlight(block, perfect);
+        }
+    }
+
+    private deflectWithShield (block: Block)
+    {
+        const sign = block.vx < 0 ? -1 : 1;
+        block.moving = false;
+        this.mover = null;
+        this.syncMoverSpeed();
+        this.releasePallet();
+        this.itemEffects.shieldBroken(this.player.node.x, this.player.node.y);
+        this.thud(9, 150);
+        playSfx(this, 'shield-break');
+        this.tweens.add({
+            targets: block.node,
+            x: block.node.x - sign * 240,
+            y: block.node.y + 90,
+            angle: -sign * 35,
+            alpha: 0,
+            duration: 350,
+            ease: 'Quad.Out',
+            onComplete: () => block.node.destroy()
+        });
+        this.spawnMover();
+    }
+
+    /** Developer UI: force only the next incoming box, keeping actual landing gameplay. */
+    private forceItem (kind: ItemKind)
+    {
+        if (this.springFlight || this.phase !== 'play') return;
+        const replacementMultiplier = this.mover?.speedMultiplier;
+        const difficultyScale = this.mover?.difficultyScale;
+        this.mover?.node.destroy();
+        this.mover = null;
+        this.releasePallet();
+        this.forcedItem = kind;
+        // Changing a developer-forced texture replaces the same mover, not another boost charge.
+        this.spawnMover(replacementMultiplier, difficultyScale);
+    }
+
+    private startSpringFlight (source: Block, perfect: boolean)
+    {
+        const columnX = this.body(source).x;
+        const launchSurface = this.top(this.body(source));
+        const deliveries: SpringDelivery[] = [];
+        let previous = source;
+
+        this.springWasPerfect = perfect;
+        this.thud(18, 260);
+
+        // Measure all exact final positions before putting their drawings off-screen.
+        for (let i = 0; i < SPRING_STACK_COUNT; i++)
+        {
+            const block = this.createBlock({ ...MOVER_ART, key: this.skins.rollTexture() }, false, 'normal');
+            block.itemConsumed = true;
+            block.node.setDepth(this.stack.length + i + 1);
+            this.placeBlock(block, columnX, this.stackBottom(previous));
+            const sign = i % 2 === 0 ? -1 : 1;
+            deliveries.push({
+                block, targetX: block.node.x, targetY: block.node.y,
+                startX: columnX + sign * (this.scale.width / 2 + 160),
+                startY: block.node.y + 100
+            });
+            previous = block;
+        }
+        const landingSurface = this.top(this.body(previous));
+        for (const delivery of deliveries)
+        {
+            delivery.block.node.setPosition(delivery.startX, delivery.startY).setVisible(false);
+        }
+
+        this.springFlight = { elapsed: 0, columnX, launchSurface, landingSurface, deliveries };
+        this.anchorX = columnX;
+        this.player.node.x = columnX;
+        this.grounded = false;
+        this.player.vx = 0;
+        this.player.vy = springTrajectory(0, launchSurface, landingSurface, BOX_VISUAL_H).vy;
+        this.player.sprite.play(PLAYER_JUMP_ANIM);
+        this.cameraLocked = false;
+        this.cameraFocusY = this.cameras.main.scrollY;
+        this.itemEffects.spring(columnX, launchSurface - PLAYER_H);
+        playSfx(this, 'spring');
+
+        this.checkpoints.prepareLeap(this.meters(), SPRING_STACK_COUNT, columnX, launchSurface, PLAYER_H, BOX_VISUAL_H * SPRING_HEIGHT_BOXES);
+    }
+
+    private simulateSpring (dt: number)
+    {
+        const flight = this.springFlight!;
+        flight.elapsed += dt;
+        const trajectory = springTrajectory(flight.elapsed, flight.launchSurface, flight.landingSurface, BOX_VISUAL_H);
+        this.player.node.setPosition(flight.columnX, trajectory.feetY - PLAYER_H / 2);
+        this.player.vy = trajectory.vy;
+        this.player.vx = 0;
+
+        flight.deliveries.forEach((delivery, index) =>
+        {
+            const progress = springDeliveryProgress(flight.elapsed, index);
+            delivery.block.node.setVisible(progress > 0).setPosition(
+                delivery.startX + (delivery.targetX - delivery.startX) * progress,
+                delivery.startY + (delivery.targetY - delivery.startY) * progress
+            ).setAngle((index % 2 === 0 ? -12 : 12) * (1 - progress));
+        });
+        this.observeCheckpoint();
+        if (!trajectory.landed) return;
+
+        for (const delivery of flight.deliveries)
+        {
+            delivery.block.node.setPosition(delivery.targetX, delivery.targetY).setVisible(true).setAngle(0);
+            this.stack.push(delivery.block);
+            this.perfectBoxes++;
+        }
+        // Automatic centred boxes are visual perfect stacks, not ten combo-scored player lands.
+        this.heightMeters += SPRING_STACK_COUNT;
+        const top = flight.deliveries[flight.deliveries.length - 1].block;
+        this.springFlight = null;
+        this.springFlightsCompleted++;
+        this.groundOn(top);
+        this.updateHeight();
+        this.squash(top);
+        this.celebrate(top);
+        this.flashPerfect(top);
+        this.itemEffects.popScore(this.player.node.x, this.player.node.y - PLAYER_H * 0.9, SPRING_STACK_COUNT, this.springWasPerfect);
+        this.heightText.punch();
+        this.spawnMover();
+    }
+
+    /** Keeps the board under the moving box, trailing back toward the side it came from. */
+    private syncPallet ()
+    {
+        const block = this.mover;
+        const pallet = this.pallet;
+
+        if (!block || !pallet)
+        {
+            return;
+        }
+
+        const { node, art } = block;
+        const frame = node.frame;
+        const originX = node.x - frame.width * art.scaleX / 2;
+        const originY = node.y - frame.height * art.scaleY / 2;
+        const visualLeft = originX + BOX_VISUAL_LEFT * art.scaleX;
+        const visualRight = originX + BOX_VISUAL_RIGHT * art.scaleX;
+        const visualBottom = originY + BOX_VISUAL_BOTTOM * art.scaleY;
+        const lead = (this.palletSign > 0 ? PALLET_RIGHT : PALLET_LEFT) - PALLET_FRAME_W / 2;
+        const topLead = PALLET_TOP - PALLET_FRAME_H / 2;
+
+        pallet.setScale(PALLET_SCALE);
+        pallet.setPosition(
+            (this.palletSign > 0 ? visualRight : visualLeft) - lead * PALLET_SCALE,
+            visualBottom - topLead * PALLET_SCALE
+        );
+        pallet.setDepth(node.depth - 0.1);
+    }
+
+    /** After the box is set down, the board disappears. */
+    private releasePallet ()
+    {
+        this.pallet?.destroy();
+        this.pallet = null;
+    }
+
+    /** Where the bottom of the next box sits. On another box, that is partway down the lid. */
+    private stackBottom (support: Block)
+    {
+        const surface = this.top(this.body(support));
+
+        if (support.art.key === BASE_ART.key)
+        {
+            return surface;
+        }
+
+        return surface + (MOVER_LID_BOTTOM_PX - support.art.surface) * support.art.scaleY;
+    }
+
+    /** Effective world pixels per second, without changing the normal baseline. */
+    private boardSpeed ()
+    {
+        const mover = this.mover;
+
+        return this.boardPx * (mover?.difficultyScale ?? 1) * (mover?.speedMultiplier ?? 1);
+    }
+
+    /** Keep a box that is already sliding on the speed chosen in the debug panel. */
+    private applyBoardSpeed ()
+    {
+        const speed = this.boardSpeed();
+
+        if (this.mover?.moving && this.mover.vx !== 0)
+        {
+            this.mover.vx = Math.sign(this.mover.vx) * speed;
+        }
+    }
+
+    private updateSpeedStatus ()
+    {
+        // Include the current incoming boosted box, even when the last charge was assigned to it.
+        const count = this.speedBoost.remaining + (this.mover && this.mover.speedMultiplier > 1 ? 1 : 0);
+        this.speedText.setText(`加速 +30% · 剩余 ${count} 盒`).setVisible(count > 0);
+        this.speedText.setScale(Math.min(1, Math.max(1, this.scale.width - 32) / Math.max(1, this.speedText.width)));
+    }
+
+    /** Rise and fall use separate gravity so the debug panel can tune them apart. */
+    private gravity (rising: boolean)
+    {
+        const speed = rising ? this.risePx : this.fallPx;
+
+        return (2 * speed * speed) / (BOX_VISUAL_H * this.jumpBoxes);
+    }
+
+    /** Height, rise speed, fall speed and box speed for the current round. */
+    private addTuneControls ()
+    {
+        const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+        this.debugPanel.addStepper(
+            () => `高度 ${this.jumpBoxes.toFixed(2)}盒`,
+            (direction) =>
+            {
+                this.jumpBoxes = clamp(Math.round((this.jumpBoxes + direction * 0.05) * 100) / 100, 0.4, 3);
+            }
+        );
+        this.debugPanel.addStepper(
+            () => `上升 ${Math.round(this.risePx)}/秒`,
+            (direction) =>
+            {
+                this.risePx = clamp(this.risePx + direction * 40, 80, 2000);
+            }
+        );
+        this.debugPanel.addStepper(
+            () => `落下 ${Math.round(this.fallPx)}/秒`,
+            (direction) =>
+            {
+                this.fallPx = clamp(this.fallPx + direction * 40, 80, 2000);
+            }
+        );
+        this.debugPanel.addStepper(
+            () => `盒子 ${Math.round(this.boardSpeed())}/秒`,
+            (direction) =>
+            {
+                this.boardPx = clamp(this.boardPx + direction * 40, 40, 1600);
+                this.applyBoardSpeed();
+            }
+        );
+    }
+
+    private passed (block: Block)
+    {
+        const body = this.body(block);
+        const viewLeft = this.cameras.main.scrollX;
+        const viewRight = viewLeft + this.scale.width;
+
+        if (block.vx > 0)
+        {
+            return this.left(body) > viewRight + 80;
+        }
+
+        return this.right(body) < viewLeft - 80;
+    }
+
+    private createBlock (art: BlockArt, moving: boolean, item: ItemKind = 'normal'): Block
+    {
+        const node = this.add.image(0, 0, art.key).setScale(art.scaleX, art.scaleY).setDepth(1);
+
+        return { node, art, vx: 0, vy: 0, moving, item, itemConsumed: false, speedMultiplier: 1, difficultyScale: 1 };
+    }
+
+    /** Moves the block so its collision area is centred on `x` with its bottom at `bottom`. */
+    private placeBlock (block: Block, x: number, bottom: number)
+    {
+        const { node, art } = block;
+        const frame = node.frame;
+
+        node.setPosition(
+            x - ((art.left + art.right) / 2 - frame.width / 2) * art.scaleX,
+            bottom - (art.bottom - frame.height / 2) * art.scaleY
+        );
+    }
+
+    private body (block: Block): Box
+    {
+        const { node, art } = block;
+        const frame = node.frame;
+        const originX = node.x - frame.width * art.scaleX / 2;
+        const originY = node.y - frame.height * art.scaleY / 2;
+        const left = originX + art.left * art.scaleX;
+        const right = originX + art.right * art.scaleX;
+        const top = originY + art.surface * art.scaleY;
+        const bottom = originY + art.bottom * art.scaleY;
+
+        return {
+            x: (left + right) / 2,
+            y: (top + bottom) / 2,
+            displayWidth: right - left,
+            displayHeight: bottom - top
+        };
+    }
+
+    private followCamera (snap: boolean)
+    {
+        const camera = this.cameras.main;
+        const height = this.scale.height;
+
+        camera.scrollX = this.anchorX - this.scale.width / 2;
+
+        if (snap)
+        {
+            this.cameraLocked = true;
+            const strip = (BASE_DIRT_BOTTOM_PX - BASE_SURFACE_PX) * this.stack[0].art.scaleY;
+            const centerScreen = height - strip - PLAYER_H / 2;
+
+            this.lockedScrollY = this.player.node.y - centerScreen;
+            camera.scrollY = this.lockedScrollY;
+            return;
+        }
+
+        if (this.springFlight)
+        {
+            this.cameraLocked = false;
+            this.cameraFocusY = Math.min(this.cameraFocusY, this.player.node.y - height * CAMERA_FOLLOW_SCREEN_Y);
+            camera.scrollY += (this.cameraFocusY - camera.scrollY) * 0.18;
+            return;
+        }
+
+        if (this.cameraLocked)
+        {
+            camera.scrollY = this.lockedScrollY;
+
+            if (!this.grounded)
+            {
+                return;
+            }
+
+            const screenY = this.player.node.y - this.lockedScrollY;
+
+            if (screenY > height * CAMERA_FOLLOW_SCREEN_Y)
+            {
+                return;
+            }
+
+            this.cameraLocked = false;
+            this.cameraFocusY = this.player.node.y - height * CAMERA_FOLLOW_SCREEN_Y;
+        }
+        else if (this.grounded)
+        {
+            this.cameraFocusY = this.player.node.y - height * CAMERA_FOLLOW_SCREEN_Y;
+        }
+
+        camera.scrollY += (this.cameraFocusY - camera.scrollY) * 0.18;
+    }
+
+    private layoutGround (width: number, height: number)
+    {
+        if (this.stack.length !== 1 || !this.grounded)
+        {
+            return;
+        }
+
+        const base = this.stack[0];
+        const art = base.art;
+        const strip = BASE_DIRT_BOTTOM_PX - BASE_SURFACE_PX;
+        const scale = Math.max(width / BASE_FRAME_W, (height * BASE_SCREEN_FRACTION) / strip);
+
+        art.scaleX = scale;
+        art.scaleY = scale;
+        art.left = 16;
+        art.right = BASE_FRAME_W - 16;
+        art.bottom = art.surface + 48 / scale;
+        base.node.setScale(scale);
+        this.placeBlock(base, width / 2, BASE_SURFACE_Y + (art.bottom - art.surface) * scale);
+        this.player.node.x = width / 2;
+        this.groundOn(base);
+        this.syncPlayerSprite();
+        this.anchorX = this.body(base).x;
+    }
+
+    /** Keep the same background crop during failure overview zoom; score progress stays frozen. */
+    private layoutBackground ()
+    {
+        this.altitudeBackground?.layout();
+    }
+
+    private layout ()
+    {
+        const width = this.scale.width;
+        const height = this.scale.height;
+
+        this.layoutBackground();
+        this.layoutGround(width, height);
+        this.hud.layout(width, height);
+        const cornerBottom = this.hud.status().cornerBottom;
+        this.chaseHud.layout(width, height, cornerBottom, 0);
+        const chaseBottom = this.chaseHud.bounds().bottom;
+        const meterY = Math.max(height * 0.3 - BOX_VISUAL_H, chaseBottom + 66);
+        this.heightText.setPosition(width / 2, meterY);
+        this.heightText.fitToWidth(Math.max(96, width - (this.hud.bounds().right + 24) * 2));
+        const scoreBottom = meterY + this.heightText.status().height / 2;
+        this.countdownText.setPosition(width / 2, height / 2);
+        this.hint.setPosition(width / 2, height / 2 + 210);
+        this.speedText.setPosition(width / 2, scoreBottom + 70);
+        this.speedText.setScale(Math.min(1, Math.max(1, width - 32) / Math.max(1, this.speedText.width)));
+        this.chaseHud.layout(width, height, cornerBottom, scoreBottom);
+        this.debugPanel.layout(width, height, chaseBottom + 8);
+        this.checkpoints.layout();
+    }
+
+    private updateHeight ()
+    {
+        this.heightText.setValue(this.meters());
+        this.heightText.fitToWidth(Math.max(96, this.scale.width - (this.hud.bounds().right + 24) * 2));
+        this.hud.setMeters(this.meters());
+        getWeeklyLeaderboard(this).record(this.meters());
+        this.chaseHud.setMeters(this.meters());
+    }
+
+    private meters ()
+    {
+        return this.heightMeters;
+    }
+
+    /** Ordinary land is 1m. Each perfect in a row adds one more metre than the last, from 2 up to 5. */
+    private scoreLand (perfect: boolean, awardMeters = true)
+    {
+        if (!perfect)
+        {
+            this.perfectStreak = 0;
+
+            if (awardMeters)
+            {
+                this.heightMeters += NORMAL_METERS;
+            }
+
+            return awardMeters ? NORMAL_METERS : 0;
+        }
+
+        this.perfectStreak++;
+        this.perfectBoxes++;
+
+        const gained = Math.min(PERFECT_METERS_MAX, this.perfectStreak + NORMAL_METERS);
+
+        if (awardMeters)
+        {
+            this.heightMeters += gained;
+        }
+
+        return awardMeters ? gained : 0;
+    }
+
+    /** Freeze the original camera until the whole actor has fallen below that viewport. */
+    private observeFailureDrop ()
+    {
+        if (this.failureDropComplete || this.overviewStarted || this.settlementShown) return;
+        if (this.top(this.player.node) <= this.cameras.main.scrollY + this.scale.height + 24) return;
+        this.failureDropComplete = true;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        // Zooming down to the ground must not bring the already-fallen actor back into view.
+        this.player.sprite.setVisible(false);
+        this.overviewDelayTimer = this.time.delayedCall(FAILURE_OVERVIEW_DELAY_MS, () =>
+        {
+            this.overviewDelayTimer = undefined;
+            if (this.phase === 'dead' && this.failureDropComplete && this.scene.isActive()) this.beginOverview();
+        });
+    }
+
+    /** Zoom out until the landed tower, from the ground to the top box, fits on one screen. */
+    private beginOverview ()
+    {
+        if (!this.failureDropComplete || this.overviewStarted || this.settlementShown || !this.scene.isActive()) return;
+        this.overviewStarted = true;
+        this.cameras.main.roundPixels = false;
+        this.frameTower(false);
+    }
+
+    private towerSpan ()
+    {
+        const surfaceY = this.top(this.body(this.stack[0]));
+        let top = surfaceY;
+        let bottom = surfaceY;
+
+        for (let index = 1; index < this.stack.length; index++)
+        {
+            const block = this.stack[index];
+            const frame = block.node.frame;
+            const originY = block.node.y - frame.height * block.art.scaleY / 2;
+            top = Math.min(top, originY + BOX_VISUAL_TOP * block.art.scaleY);
+            bottom = Math.max(bottom, originY + BOX_VISUAL_BOTTOM * block.art.scaleY);
+        }
+
+        // A little ground under the lowest box, so the tower is not cut off at the grass.
+        bottom = Math.max(bottom, surfaceY) + BOX_VISUAL_H * 0.35;
+        return { top, bottom };
+    }
+
+    private frameTower (snap: boolean)
+    {
+        // Do not filter by depth: a very tall stack can exceed the HUD's depth.
+        const keep = new Set([ this.background, ...this.stack.map(block => block.node) ]);
+        for (const object of this.children.list)
+        {
+            if (!keep.has(object as Phaser.GameObjects.Image) && 'setVisible' in object)
+            {
+                (object as Phaser.GameObjects.Image).setVisible(false);
+            }
+        }
+        const camera = this.cameras.main;
+        const width = Math.max(1, this.scale.width);
+        const height = Math.max(1, this.scale.height);
+        const span = this.towerSpan();
+        const towerHeight = Math.max(BOX_VISUAL_H, span.bottom - span.top);
+        const zoom = Math.min(1, (height * 0.84) / towerHeight);
+        const scrollX = this.anchorX - width / 2;
+        const scrollY = (span.top + span.bottom) / 2 - height / 2;
+        const running = this.tweens.getTweensOf(this.overviewFrame);
+
+        if (snap)
+        {
+            if (running.length > 0)
+            {
+                this.tweens.killTweensOf(this.overviewFrame);
+                this.scheduleOverviewHold();
+            }
+            camera.setZoom(zoom);
+            camera.setScroll(scrollX, scrollY);
+            this.layoutBackground();
+            return;
+        }
+
+        this.overviewFrame.zoom = camera.zoom;
+        this.overviewFrame.scrollX = camera.scrollX;
+        this.overviewFrame.scrollY = camera.scrollY;
+        this.tweens.add({
+            targets: this.overviewFrame,
+            zoom, scrollX, scrollY,
+            duration: OVERVIEW_ZOOM_MS,
+            ease: 'Cubic.Out',
+            onUpdate: () =>
+            {
+                camera.setZoom(this.overviewFrame.zoom);
+                camera.setScroll(this.overviewFrame.scrollX, this.overviewFrame.scrollY);
+                this.layoutBackground();
+            },
+            onComplete: () => this.scheduleOverviewHold()
+        });
+    }
+
+    private scheduleOverviewHold ()
+    {
+        if (this.overviewHoldScheduled) return;
+        this.overviewHoldScheduled = true;
+        this.time.delayedCall(OVERVIEW_HOLD_MS, () =>
+        {
+            if (this.scene.isActive()) this.showOver();
+        });
+    }
+
+    private showOver ()
+    {
+        if (this.settlementShown)
+        {
+            return;
+        }
+
+        this.settlementShown = true;
+        this.phase = 'over';
+        this.hint.setVisible(false);
+        this.debugPanel.close();
+        stopBgm(this);
+        const summary: RoundSummary = {
+            meters: this.meters(),
+            coinsEarned: Math.max(0, this.wallet.total - this.roundStartCoins),
+            totalCoins: this.wallet.total,
+            boxes: Math.max(0, this.stack.length - 1),
+            perfectBoxes: this.perfectBoxes
+        };
+        // A paused scene still renders, retaining the exact tower and final camera frame.
+        // GameOver stops this frozen scene only when retrying, returning, or shutting down.
+        this.scene.launch('GameOver', { ...summary, towerBackdrop: true });
+        this.scene.pause();
+    }
+
+    private intersects (a: Box, b: Box)
+    {
+        return this.xOverlap(a, b) > 0 && Math.abs(a.y - b.y) * 2 < a.displayHeight + b.displayHeight;
+    }
+
+    private xOverlap (a: Box, b: Box)
+    {
+        const left = Math.max(this.left(a), this.left(b));
+        const right = Math.min(this.right(a), this.right(b));
+
+        return Math.max(0, right - left);
+    }
+
+    private left (node: Box)
+    {
+        return node.x - node.displayWidth / 2;
+    }
+
+    private right (node: Box)
+    {
+        return node.x + node.displayWidth / 2;
+    }
+
+    private top (node: Box)
+    {
+        return node.y - node.displayHeight / 2;
+    }
+
+    private bottom (node: Box)
+    {
+        return node.y + node.displayHeight / 2;
+    }
+}
