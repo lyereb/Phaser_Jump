@@ -77,7 +77,7 @@ export class AccentEffects
             if (spark.streak)
             {
                 const len = Math.min(10, size * 2.2);
-                const angle = Math.atan2(spark.vy, spark.vx);
+                const angle = Math.atan2(s.vy, s.vx);
                 g.lineStyle(1.4, spark.color, alpha * 0.55).lineBetween(s.x, s.y,
                     s.x - Math.cos(angle) * len, s.y - Math.sin(angle) * len);
             }

@@ -1,6 +1,7 @@
 import { GameObjects, Math as PMath, Scene } from 'phaser';
 import { playSfx } from './audio';
 import { CheckpointProgress, checkpointDistance, checkpointTouchesPlayer, type CheckpointBounds } from './checkpointProgress';
+import { AccentEffects } from './accentEffects';
 
 const BAG = 'checkpoint-bag';
 const BAG_HEIGHT = 96;
@@ -43,9 +44,11 @@ export class Checkpoints
     private effects = new Set<GameObjects.GameObject>();
     private burstCount = 0;
     private lastCompleted: number | null = null;
+    private accents: AccentEffects;
 
     constructor (private scene: Scene, private depth: number)
     {
+        this.accents = new AccentEffects(scene, depth - 12);
         scene.events.once('shutdown', () => this.destroy());
     }
 
@@ -165,7 +168,9 @@ export class Checkpoints
                 && this.gate.root.y - 32 < this.scene.cameras.main.scrollY + this.scene.scale.height : false,
             bursts: this.burstCount,
             lastCompleted: this.lastCompleted,
-            activeEffects: this.effects.size
+            activeEffects: this.effects.size,
+            accentParticles: this.accents.status().sparks,
+            accentWaves: this.accents.status().waves
         };
     }
 
@@ -258,6 +263,9 @@ export class Checkpoints
             {
                 const { x, y } = gate.root;
                 gate.bag.setVisible(false);
+                this.accents.wave(x, y + 38, 0xffe294, 94, 0.47, 0.56);
+                this.accents.wave(x, y + 38, 0xfff2cb, 62, 0.7, 0.36);
+                this.accents.burst(x, y + 38, 'checkpoint', 12);
                 this.fragments(x, y, gate.image.scale);
                 scene.tweens.add({
                     targets: gate.root,
@@ -285,26 +293,27 @@ export class Checkpoints
             } });
         }
 
-        const flash = this.track(scene.add.circle(x, y + 38, 18, 0xfff8c8, 0.85).setDepth(this.depth - 1));
-        scene.tweens.add({ targets: flash, scale: 6, alpha: 0, duration: 330, ease: 'Quad.Out', onComplete: () => flash.destroy() });
+        const flash = this.track(scene.add.circle(x, y + 38, 18, 0xfff8c8, 0.13).setDepth(this.depth - 12));
+        scene.tweens.add({ targets: flash, scale: 4.2, alpha: 0, duration: 280, ease: 'Quad.Out', onComplete: () => flash.destroy() });
 
-        const colors = [ 0xffdc24, 0xffec72, 0xf05a49, 0xffa840 ];
-        for (let i = 0; i < 26; i++)
+        const colors = [ 0xffdf72, 0xffefbd, 0xf28876, 0xffba6e ];
+        for (let i = 0; i < 18; i++)
         {
             const color = colors[i % colors.length];
-            const piece = this.track(scene.add.rectangle(x, y + 38, PMath.Between(5, 10), PMath.Between(8, 15), color)
-                .setStrokeStyle(1, 0x9c602a).setAngle(PMath.Between(0, 180)).setDepth(this.depth + 2));
-            const dx = PMath.Between(-165, 165);
+            const piece = this.track(scene.add.rectangle(x, y + 38, PMath.Between(4, 7), PMath.Between(7, 12), color, 0.86)
+                .setStrokeStyle(0.7, 0xb58143, 0.65).setAngle(PMath.Between(0, 180)).setDepth(this.depth + 2));
+            const dx = PMath.Between(-140, 140);
             const up = PMath.Between(45, 130);
-            scene.tweens.add({ targets: piece, x: x + dx * 0.55, y: y + 38 - up, angle: piece.angle + PMath.Between(-160, 160), duration: 220, ease: 'Quad.Out', onComplete: () =>
+            scene.tweens.add({ targets: piece, x: x + dx * 0.55, y: y + 38 - up, angle: piece.angle + PMath.Between(-90, 90), duration: 240, ease: 'Cubic.Out', onComplete: () =>
             {
-                scene.tweens.add({ targets: piece, x: x + dx, y: y + 180, angle: piece.angle + PMath.Between(-220, 220), alpha: 0, scale: 0.4, duration: PMath.Between(500, 800), ease: 'Quad.In', onComplete: () => piece.destroy() });
+                scene.tweens.add({ targets: piece, x: x + dx, y: y + 160, angle: piece.angle + PMath.Between(-150, 150), alpha: 0, scale: 0.35, duration: PMath.Between(650, 900), ease: 'Quad.In', onComplete: () => piece.destroy() });
             } });
         }
     }
 
     private destroy ()
     {
+        this.accents.destroy();
         this.gate = null;
         for (const object of Array.from(this.effects))
         {
