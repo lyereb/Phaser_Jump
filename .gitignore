@@ -26,3 +26,13 @@ dist-ssr
 .env
 .env.*
 
+
+# 浏览器测试 profile、AI 代理缓存、临时工作区
+chrome-profile/
+.manus/
+__pycache__/
+*.pyc
+*.crdownload
+# .work 只保留各任务的原始素材 raw/（scripts/prepare_*.py 依赖），其余为备份/验证/构建等临时文件
+.work/*/*
+!.work/*/raw/
