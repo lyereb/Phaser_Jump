@@ -790,6 +790,7 @@ export class Game extends Scene
 
         sprite.setPosition(node.x, this.bottom(node));
         this.itemEffects?.update(node.x, node.y, this.shieldCharge.active);
+        this.itemEffects?.springTrail(node.x, this.bottom(node), !!this.springFlight && this.phase === 'play');
     }
 
     /** Freeze the opening jump and the first box until 3, 2, 1 has finished. */
@@ -950,7 +951,7 @@ export class Game extends Scene
         else if (block.item === 'speed')
         {
             this.speedBoost.grant();
-            this.itemEffects.toast(x, y - PLAYER_H, '后续 5 盒加速 +30%', '#ffc0b8');
+            this.itemEffects.speedGranted(x, y - PLAYER_H);
             playSfx(this, 'speed');
         }
         else if (block.item === 'spring')

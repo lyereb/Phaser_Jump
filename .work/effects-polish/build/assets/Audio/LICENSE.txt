@@ -1,0 +1,12 @@
+Audio from Mixkit (https://mixkit.co), used under the Mixkit License.
+Free for commercial and non-commercial projects. Attribution not required.
+
+SFX:
+- jump.mp3   — Player jumping in a video game
+- land.mp3   — Short wood impact / thud
+- jackpot.mp3 — Bigger success / reward
+- fail.mp3   — Fail / miss cue
+- ui.mp3     — UI click
+
+BGM:
+- bgm.mp3    — Humorous / quirky fairytale stock music (Mixkit id 54)

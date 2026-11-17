@@ -1,0 +1,34 @@
+{
+  "passed": 13,
+  "checks": [
+    "coins effects render and transient highlights expire",
+    "shield effects render and transient highlights expire",
+    "break effects render and transient highlights expire",
+    "spring effects render and transient highlights expire",
+    "speed effects render and transient highlights expire",
+    "checkpoint effects render and transient highlights expire",
+    "all visual-only effects preserve scores and wallet",
+    "scene pause/resume freezes and continues all accent time",
+    "100 simultaneous requests stay within 64 sparks/eight waves and fully retire",
+    "pooled spring and speed trails hide immediately on ending",
+    "shield and checkpoint remain restrained against dark space background",
+    "real spring landing flies, draws a short ribbon, grants exactly ten metres and hides trail on completion",
+    "scene exit destroys accent layers and removes update listener"
+  ],
+  "errors": [],
+  "initial": {
+    "meters": 120,
+    "wallet": 0
+  },
+  "stable": {
+    "meters": 120,
+    "wallet": 0
+  },
+  "maxStress": {
+    "sparks": 64,
+    "waves": 8,
+    "layers": 1,
+    "destroyed": false
+  },
+  "listenersBeforeExit": 6
+}

@@ -1,0 +1,14 @@
+{
+  "passed": 9,
+  "checks": [
+    "burst caps at 20 and pool never exceeds 64 sparks",
+    "waves cap at eight and radius cannot expand across full screen",
+    "sparks are tiny and softly fade, never large opaque flashes",
+    "particles and waves expire completely without new emission",
+    "spring has an upward fan, not an omnidirectional explosion",
+    "30 and 60 fps analytical motion agree at equal lifetime",
+    "invalid frame deltas do not corrupt or advance effects",
+    "screen-space coin trails have only 240ms lifetime",
+    "clear is idempotent and removes all active highlights"
+  ]
+}

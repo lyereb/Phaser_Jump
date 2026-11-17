@@ -1,0 +1,15 @@
+'use strict';const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'../..'),ts=require(path.join(root,'node_modules/typescript'));
+const js=ts.transpileModule(fs.readFileSync(path.join(root,'src/game/accentEffectsModel.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
+const m={exports:{}};vm.runInNewContext('(function(exports,module){'+js+'})')(m.exports,m);
+const {AccentPool,accentSample,ACCENT_LIMITS}=m.exports,checks=[];function test(n,f){f();checks.push(n);console.log('PASS '+n)}
+test('burst caps at 20 and pool never exceeds 64 sparks',()=>{const p=new AccentPool(()=>.5);p.burst(0,0,'gold',200);assert.equal(p.sparks.length,20);for(let i=0;i<100;i++)p.burst(0,0,'blue',20);assert.equal(p.sparks.length,64)});
+test('waves cap at eight and radius cannot expand across full screen',()=>{const p=new AccentPool(()=>.5);for(let i=0;i<100;i++)p.wave(0,0,0xffffff,999);assert.equal(p.waves.length,8);assert.ok(p.waves.every(w=>w.radius<=100))});
+test('sparks are tiny and softly fade, never large opaque flashes',()=>{const p=new AccentPool(()=>.5);p.burst(0,0,'gold',20);for(const s of p.sparks){assert.ok(s.size<=7.6);for(let t=0;t<s.life;t+=.01){s.age=t;const a=accentSample(s);assert.ok(Number.isFinite(a.x)&&Number.isFinite(a.y)&&a.alpha>=0&&a.alpha<=1)}}});
+test('particles and waves expire completely without new emission',()=>{const p=new AccentPool(()=>.5);p.burst(0,0,'checkpoint',20);p.wave(0,0,0xffffff);for(let i=0;i<30;i++)p.update(50);assert.equal(p.sparks.length,0);assert.equal(p.waves.length,0)});
+test('spring has an upward fan, not an omnidirectional explosion',()=>{const p=new AccentPool(()=>.5);p.burst(0,0,'spring',12);assert.ok(p.sparks.every(s=>s.vy<0&&Math.abs(s.vx)<Math.abs(s.vy)))});
+test('30 and 60 fps analytical motion agree at equal lifetime',()=>{const a=new AccentPool(()=>.5),b=new AccentPool(()=>.5);a.burst(0,0,'blue',5);b.burst(0,0,'blue',5);for(let i=0;i<6;i++)a.update(1000/30);for(let i=0;i<12;i++)b.update(1000/60);const x=accentSample(a.sparks[0]),y=accentSample(b.sparks[0]);assert.ok(Math.abs(x.x-y.x)<1e-8&&Math.abs(x.y-y.y)<1e-8)});
+test('invalid frame deltas do not corrupt or advance effects',()=>{const p=new AccentPool(()=>.5);p.burst(0,0,'gold',1);for(const n of [0,-1,NaN,Infinity])p.update(n);assert.equal(p.elapsed,0);p.update(999999);assert.equal(p.elapsed,.05)});
+test('screen-space coin trails have only 240ms lifetime',()=>{const p=new AccentPool(()=>.5);p.mote(10,20,0xffee99);for(let i=0;i<5;i++)p.update(50);assert.equal(p.sparks.length,0)});
+test('clear is idempotent and removes all active highlights',()=>{const p=new AccentPool(()=>.5);p.burst(0,0,'speed',9);p.wave(0,0,0xffffff);p.clear();p.clear();assert.equal(p.sparks.length,0);assert.equal(p.waves.length,0)});
+fs.writeFileSync(path.join(__dirname,'validation/model-results.json'),JSON.stringify({passed:checks.length,checks},null,2));

@@ -18,6 +18,8 @@ export function accentSample (spark: AccentSpark)
     const distance = (1 - Math.exp(-2.1 * t)) / 2.1;
     return { x: spark.x + spark.vx * distance,
         y: spark.y + spark.vy * distance + spark.gravity * t * t / 2,
+        vx: spark.vx * Math.exp(-2.1 * t),
+        vy: spark.vy * Math.exp(-2.1 * t) + spark.gravity * t,
         alpha: Math.min(1, p / 0.07) * Math.pow(1 - p, 1.35) *
             (0.78 + 0.22 * Math.sin(t * 16 + spark.phase)),
         size: spark.size * (0.85 + 0.15 * Math.sin(t * 10 + spark.phase)) };
@@ -43,7 +45,8 @@ export class AccentPool
             const colors = ACCENT_PALETTES[style];
             this.add({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
                 gravity: upward ? 180 : style === 'checkpoint' ? 210 : 90,
-                age: 0, life: 0.48 + this.random() * 0.38, size: 1.8 + this.random() * 2.4,
+                age: 0, life: 0.48 + this.random() * 0.38,
+                size: i % 4 === 0 ? 6 + this.random() * 1.6 : 2 + this.random() * 2.4,
                 color: colors[i % colors.length], phase: this.random() * Math.PI * 2,
                 streak: upward || style === 'speed' });
         }
