@@ -1,0 +1,28 @@
+{
+  "scene_passed": 15,
+  "model_passed": 36,
+  "existing_passed": {
+    "level-progress": 13,
+    "checkpoint": 14,
+    "spring": 6,
+    "items": 12
+  },
+  "total_passed": 96,
+  "build": "passed",
+  "typecheck": "passed",
+  "framed": false,
+  "visible_identity_details": false,
+  "distance_digits": "existing UI/letters.png yellow sprite frames, height48",
+  "main_digits_height": 96,
+  "celebration": {
+    "font_size": 70,
+    "overshoot": 1.15,
+    "confetti": 60,
+    "bursts": 2,
+    "rings": 2,
+    "duration_ms": 1880,
+    "cleanup": "visible fade onComplete",
+    "decorative_area_does_not_block_jump": true
+  },
+  "qa_storage_isolated": true
+}

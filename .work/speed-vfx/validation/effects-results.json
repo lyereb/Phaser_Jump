@@ -1,0 +1,19 @@
+{
+  "passed": 13,
+  "tests": [
+    "normal or absent movers allocate no speed objects",
+    "active mover creates visible pooled rear and front graphics",
+    "rightward mover exhaust points left behind its rear edge",
+    "leftward mover exhaust points right behind its rear edge",
+    "world position and layer follow the current box",
+    "zero delta produces an identical visual frame",
+    "simulation delta advances streaks and glints without tweens",
+    "stopping clears both layers and resets local visual time",
+    "landing or removal clears both layers via a null mover",
+    "next boosted box reuses the two graphics instead of leaking per-frame particles",
+    "shutdown destroys tracked speed layers and removes references",
+    "renderer does not mutate box coordinates velocity or dimensions",
+    "negative delta never rewinds visual time"
+  ],
+  "visualBrowserPlaytest": false
+}

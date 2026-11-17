@@ -1,0 +1,17 @@
+{
+  "pure_logic_passed": 26,
+  "item_scenes_passed": 10,
+  "checkpoint_scenes_passed": 9,
+  "total_passed": 45,
+  "typecheck": "passed",
+  "build": "passed",
+  "ai_replaced": [
+    "checkpoint_bag",
+    "coin_box",
+    "shield_box",
+    "spring_box"
+  ],
+  "pending_ai_replacement": [],
+  "shield_retry": "user_approved_success",
+  "other_three_unchanged_during_shield_retry": true
+}

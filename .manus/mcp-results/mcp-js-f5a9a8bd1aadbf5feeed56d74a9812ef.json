@@ -1,0 +1,4 @@
+In-app Browser JS state was preserved. Completed actions were not rolled back; refresh stale UI handles and continue only the remaining work.
+{"location":"at <anonymous> (in-app-browser.js:2:16)"}
+cannot read property 'goto' of undefined
+In-app Browser JavaScript context initialized for this cell with no state from earlier cells. Follow the installed runtime's API instructions from iab.help(); read them once if not already available, then reuse them.

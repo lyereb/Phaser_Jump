@@ -1,0 +1,13 @@
+{
+  "settlement_scenes_passed": 11,
+  "return_confirm_scenes_passed": 11,
+  "pure_logic_passed": 26,
+  "total_passed": 48,
+  "typecheck": "passed",
+  "build": "passed",
+  "legacy_text_removed_from_production": true,
+  "native_retry_click": "passed",
+  "native_menu_click": "passed",
+  "qa_coin_storage_isolated": true,
+  "preview_watch_error_repaired": "EBUSY: ignore .work, outputs and .manus"
+}

@@ -1,0 +1,29 @@
+{
+  "passed": 24,
+  "tests": [
+    "six skins have unique ids files and texture keys, price 500",
+    "fresh collection includes default yellow only",
+    "successful unlock deducts exactly 500 and selects immediately",
+    "exactly 500 coins can buy once and balance becomes zero",
+    "coffee cake and royal cost 1000 2000 and 5000",
+    "insufficient coins change neither ownership selection nor wallet",
+    "repeated unlock calls never charge again or alter a manual deselection",
+    "unlocked selection toggles without another charge and ownership is retained",
+    "multiple unlocked skins can be selected together",
+    "deselecting all keeps the default yellow in the pool",
+    "locked and unknown skins cannot enter the random pool",
+    "ownership selection and coins survive new instances",
+    "fresh VM simulates browser refresh and restores persisted purchases",
+    "wallet instances share live game/shop balance",
+    "wallet rejects overdrafts fractions negatives and nonfinite values",
+    "wallet saturates rather than overflows and invalid saved data becomes zero",
+    "stored unknown duplicate and locked selected ids are sanitized",
+    "malformed or unsupported storage cannot crash or unlock skins",
+    "blocked storage retains wallet and owned skins across reopening within session",
+    "selected entries and pool snapshots cannot be mutated from outside",
+    "normal pool uses exact equal shares including default yellow",
+    "random boundaries select default first and last selected skin last",
+    "combined two-stage probability keeps special 10 percent and ordinary skins equal",
+    "unequipping one skin removes only its probability slot"
+  ]
+}

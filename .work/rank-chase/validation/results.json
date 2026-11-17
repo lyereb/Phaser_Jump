@@ -1,0 +1,16 @@
+{
+  "target": "next_opponent_above_weekly_best",
+  "remaining": "target_meters-current_round_meters+1",
+  "same_score_does_not_overtake": true,
+  "real_199_to_201": "成功超越小夏 then 小李400 remaining200",
+  "first_place_message": "你已经是第一名了，继续刷新记录吧",
+  "queued_multi_overtake": "ascending score order, no omissions",
+  "model_passed": 36,
+  "scene_passed": 12,
+  "existing_pure_regression_passed": 45,
+  "total_passed": 93,
+  "typecheck": "passed",
+  "build": "passed",
+  "native_top_card_click_does_not_jump": "passed",
+  "qa_storage_isolated": true
+}

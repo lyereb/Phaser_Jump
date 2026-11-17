@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('../../../node_modules/typescript');const file=path.resolve(__dirname,'../../../src/game/levelProgress.ts'),m={exports:{}};new Function('exports','module',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(m.exports,m);const {levelProgress:p,LEVEL_GOAL_METERS}=m.exports;const results=[],test=(name,fn)=>{fn();results.push({name,passed:true})};
+test('默认终点明确为500米',()=>assert.equal(LEVEL_GOAL_METERS,500));
+test('开局零进度和500米剩余',()=>assert.deepEqual(p(0),{meters:0,goal:500,remaining:500,ratio:0,percent:0,reached:false}));
+test('125与250米比例和剩余精确',()=>{for(const n of [125,250]){const v=p(n);assert.equal(v.ratio,n/500);assert.equal(v.percent,n/5);assert.equal(v.remaining,500-n)}});
+test('普通1米和弹簧10米精确同步比例',()=>{assert.equal(p(1).percent,.2);assert.equal(p(10).percent,2);assert.equal(p(47).remaining,453)});
+test('499米不是提前满条',()=>{const v=p(499);assert.equal(v.percent,99.8);assert.equal(v.remaining,1);assert.equal(v.reached,false)});
+test('刚好500米显示100%且剩余零',()=>{const v=p(500);assert.equal(v.percent,100);assert.equal(v.ratio,1);assert.equal(v.remaining,0);assert.equal(v.reached,true)});
+test('超过终点保留真实分数但进度封顶',()=>{const v=p(505);assert.equal(v.meters,505);assert.equal(v.percent,100);assert.equal(v.ratio,1);assert.equal(v.remaining,0)});
+test('重开重建到零状态',()=>{p(500);assert.equal(p(0).ratio,0);assert.equal(p(0).remaining,500)});
+test('负数NaN和无穷不产生坏进度',()=>{for(const v of [-5,NaN,Infinity,-Infinity])assert.equal(p(v).meters,0)});
+test('小数按真实整数米数处理',()=>assert.equal(p(37.9).meters,37));
+test('无效终点回退500米',()=>{for(const v of [0,-5,NaN,Infinity])assert.equal(p(30,v).goal,500)});
+test('不同关卡终点可配置',()=>{assert.equal(p(1250,2500).percent,50);assert.equal(p(1250,2500).remaining,1250)});
+test('大数值安全封顶且未到达不误报100%',()=>{const v=p(Number.MAX_SAFE_INTEGER-1,Number.MAX_SAFE_INTEGER);assert.equal(v.reached,false);assert.equal(v.remaining,1);assert.ok(v.percent<100);assert.equal(p(Number.MAX_SAFE_INTEGER).ratio,1)});
+const record={passed:results.length,results};console.log(JSON.stringify(record,null,2));fs.writeFileSync(path.resolve(__dirname,'../validation/progress.json'),JSON.stringify(record,null,2));

@@ -1,0 +1,61 @@
+{
+  "passed": 14,
+  "results": [
+    {
+      "name": "首个标签是50",
+      "passed": true
+    },
+    {
+      "name": "碰到目标即可领取，API不接受分数或落地条件",
+      "passed": true
+    },
+    {
+      "name": "同一个标签只能领取一次",
+      "passed": true
+    },
+    {
+      "name": "不碰当前目标不能越级领取100",
+      "passed": true
+    },
+    {
+      "name": "标签每次增加50至1000且重复标签无效",
+      "passed": true
+    },
+    {
+      "name": "新局重置到50",
+      "passed": true
+    },
+    {
+      "name": "目标接近距离连续且无5米分段突变",
+      "passed": true
+    },
+    {
+      "name": "福袋与角色头部边缘接触即命中",
+      "passed": true
+    },
+    {
+      "name": "纵向尚未碰到不会触发",
+      "passed": true
+    },
+    {
+      "name": "横向没有重叠不会因为角色更高而触发",
+      "passed": true
+    },
+    {
+      "name": "角色身体碰红绳时即使远离福袋也触发",
+      "passed": true
+    },
+    {
+      "name": "头部已在红绳上方但脚底还未碰红绳时不误判",
+      "passed": true
+    },
+    {
+      "name": "没有红绳命中区域且远离福袋不触发",
+      "passed": true
+    },
+    {
+      "name": "空命中区域不能触发",
+      "passed": true
+    }
+  ]
+}

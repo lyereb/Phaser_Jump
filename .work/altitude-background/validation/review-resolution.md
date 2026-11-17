@@ -1,0 +1,7 @@
+# 独立审查问题修复
+
+原审查报告的P3残余相机shake问题已修复。AltitudeBackground在根容器WebGL渲染步骤前读取当前相机Shake.preRender实际使用的_offsetX/_offsetY，仅在冻结后反向补偿根容器位置，不停止、重置或改变相机shake。Canvas入口采用同一背景独立补偿。
+
+真实WebGL测试在冻结状态下保持相机shake运行，用两次shakeEffect.update产生不同残余偏移，并保存纯背景截图。frozen-normal、frozen-zoom、frozen-shake-a、frozen-shake-b逐像素一致，平均通道差为0；相机isRunning仍为true，证明没有全局停止受击反馈。正常失败全景、结算隐藏与新局流程也通过真实场景验证。
+
+另外修正最终月球段的横屏纵向锚点。最初宽屏cover裁切会切掉月球上部，现按实测月球中心0.355进行位置补偿；竖屏不改变，常见横屏上边缘不再裁掉月球。原审查报告作为历史记录保留。

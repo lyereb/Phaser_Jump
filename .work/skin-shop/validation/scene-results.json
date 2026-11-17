@@ -1,0 +1,18 @@
+{
+  "passed": 12,
+  "tests": [
+    "actual shop builds all six cards with current coin balance",
+    "locked card click previews without charging coins",
+    "purchase button unlocks and equips, updates balance and state immediately",
+    "insufficient purchase displays missing coins and never grants skin",
+    "owned bottom action toggles without charging again",
+    "card checkbox toggles in place without losing other selections",
+    "pointer out cancels purchase and right-click does not purchase",
+    "close button returns once and ignores subsequent actions",
+    "Escape closes and keyboard handlers are cleaned up on shutdown",
+    "six cards and action/close buttons fit portrait and landscape viewports",
+    "resizing keeps focus and selected skins",
+    "menu skin entry launches shop once and pauses the menu"
+  ],
+  "visualBrowserPlaytest": false
+}

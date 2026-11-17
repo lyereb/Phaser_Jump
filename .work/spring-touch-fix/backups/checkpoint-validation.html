@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><base href="/"><title>Checkpoint 本地验证</title>
+<style>body{margin:16px;background:#f7eaf0;color:#493038;font:15px Arial}main{display:flex;gap:20px}#game-container{width:360px;height:640px;flex:none}aside{width:480px}button{padding:10px;margin:4px;border:1px solid #9f6f7c;border-radius:8px;cursor:pointer}pre{white-space:pre-wrap;line-height:1.5;background:white;padding:12px}h1{font-size:22px}</style></head>
+<body><main><div id="game-container"></div><aside><h1>Checkpoint 本地验证</h1><p>仅用于验证；该页面不会包含在生产构建中。</p>
+<button id="start">查看开局预置</button><button id="step">正常前进一跳</button><button id="gate">显示 50 米 checkpoint</button><button id="preview">播放爆袋预览</button><button id="tests">运行真实场景测试</button><button id="restart">重新开始</button><pre id="result">资源加载中</pre></aside></main>
+<script type="module">
+import StartGame from '/src/game/main.ts';
+const game = StartGame('game-container');
+game.registry.set('coinStorageKey', 'phaser-jump-coins-qa-checkpoint');
+const out = document.getElementById('result');
+const delay = ms => new Promise(r => setTimeout(r, ms));
+const report = value => { out.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); };
+const check = (condition, message) => { if (!condition) throw new Error(message); };
+async function reset(meters=49, streak=3) {
+  const g = game.scene.getScene('Game');
+  if (g.scene.isActive()) g.scene.restart(); else game.scene.start('Game');
+  await delay(100);
+  g.forceItem('normal');
+  g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));g.mover.vx=0;
+  g.heightMeters=meters; g.perfectStreak=streak; g.updateHeight(); g.prepareCheckpoint();
+  await delay(320);
+  // Freeze delivery at the centre so tests exercise actual jump/landing physics deterministically.
+  g.placeBlock(g.mover, g.anchorX, g.stackBottom(g.support)); g.mover.vx=0; g.syncPallet();
+  return g;
+}
+function jump(g) {
+  g.forcedItem='normal';
+  g.qaDeliver=Math.abs(g.body(g.mover).x-g.anchorX)<10;
+  if(g.qaDeliver) g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));
+  g.grounded=false; g.player.vy=-2*g.risePx; g.player.node.y-=2;
+  g.checkpoints.beginJump();
+}
+function simulateJump(g) {
+  const old=g.stack.length;
+  for (let n=0;n<150;n++) {
+    if(g.qaDeliver && g.bottom(g.player.node)<g.top(g.body(g.mover))-2) {
+      g.placeBlock(g.mover,g.anchorX,g.stackBottom(g.support));g.qaDeliver=false;
+    }
+    g.simulate(0.008);
+    if (g.stack.length>old || g.phase!=='play' || (n>5 && g.grounded)) break;
+  }
+  g.syncPlayerSprite();
+}
+window.addEventListener('error', e => report('ERROR: '+e.message));
+window.addEventListener('unhandledrejection', e => report('ERROR: '+e.reason));
+document.getElementById('start').onclick = async () => {
+  const g=await reset(0,0);g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));
+  report({meters:g.meters(),checkpoint:g.checkpoints.status()});
+};
+document.getElementById('step').onclick = async () => {
+  let g=game.scene.getScene('Game');if(!g.scene.isActive() || g.phase!=='play')g=await reset(0,0);
+  g.placeBlock(g.mover,g.anchorX,g.stackBottom(g.support));g.mover.vx=0;
+  jump(g);simulateJump(g);
+  g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));g.mover.vx=0;
+  await delay(350);report({meters:g.meters(),checkpoint:g.checkpoints.status()});
+};
+document.getElementById('gate').onclick = async () => {
+  const g=await reset();
+  g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));
+  report({meters:g.meters(), checkpoint:g.checkpoints.status()});
+};
+document.getElementById('preview').onclick = async () => {
+  const g=await reset();
+  g.checkpoints.gate.root.setVisible(false);
+  g.checkpoints.preview(g.anchorX,g.cameras.main.scrollY+g.scale.height*0.38);
+  report('播放预览：黄色袋子分裂、红色丝带与金色纸屑飞散');
+};
+document.getElementById('restart').onclick = async () => {
+  const g=await reset(0,0);report({meters:g.meters(),checkpoint:g.checkpoints.status()});
+};
+document.getElementById('tests').onclick = async () => {
+  const results=[];
+  const test=async(name,fn)=>{await fn();results.push({name,passed:true});report({running:true,results});};
+  try {
+    await test('开局已经预置50米目标，位于屏幕上方而不是等待临近才创建',async()=>{
+      const g=await reset(0,0);const state=g.checkpoints.status();
+      check(state.label===50 && state.visible,'开局应已有50米福袋');
+      check(state.screenY+96<0,'开局福袋应在屏幕上方');
+    });
+    await test('从0米正常连续跳到50：同一目标始终存在，距离逐步缩小且不跳位',async()=>{
+      const g=await reset(0,0);const gate=g.checkpoints.gate;let previousDistance=Infinity;
+      while(g.meters()<50){
+        check(g.checkpoints.gate===gate && gate.root.visible,'到达前应始终是同一个可见对象');
+        const distance=g.top(g.player.node)-gate.root.y;
+        check(distance<previousDistance,'角色与目标的距离应越来越近');previousDistance=distance;
+        g.placeBlock(g.mover,g.anchorX,g.stackBottom(g.support));g.mover.vx=0;
+        jump(g);simulateJump(g);
+        g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));g.mover.vx=0;
+        if(g.meters()<50){
+          const before=gate.root.y;check(Math.abs(before-gate.targetY)>0.01,'更新时应保留当前位置并平滑移动');
+          await delay(320);check(Math.abs(gate.root.y-gate.targetY)<0.1,'平滑更新应到达目标位置');
+        }
+      }
+      check(g.checkpoints.status().bursts===1,'50米应成功爆袋');
+      check(g.checkpoints.status().label===100,'50米通过后100米目标应立即预置');
+    });
+    await test('45→50一次增加5米，真实起跳也能越过红绳',async()=>{
+      const g=await reset(45);jump(g);simulateJump(g);
+      check(g.meters()===50 && g.checkpoints.status().bursts===1,'45→50必须正常触发');
+    });
+    await test('成功跳过且落地：49→54，50米爆袋仅触发一次',async()=>{
+      const g=await reset();check(g.checkpoints.gate.image.frame.name==='__BASE','完整袋子不能使用半张裂开帧');jump(g);simulateJump(g);
+      check(g.meters()===54,'计分应为54，实际'+g.meters()+'，阶段'+g.phase);check(g.checkpoints.status().bursts===1,'50米应爆袋');
+      check(g.checkpoints.status().nextMeters===100,'下一 checkpoint 应为100');
+      g.checkpoints.land(54);check(g.checkpoints.status().bursts===1,'不能重复爆袋');
+      await delay(1300);check(g.checkpoints.status().activeEffects===1,'爆袋对象应清理，仅保留下一个预置目标');
+    });
+    await test('跳过红绳但落回原箱子：不爆袋、不加分',async()=>{
+      const g=await reset();g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));g.mover.vx=0;
+      jump(g);simulateJump(g);check(g.grounded,'应落回旧箱子');
+      check(g.meters()===49,'不能加分');check(g.checkpoints.status().bursts===0,'不能爆袋');
+    });
+    await test('越线后撞击失败：不爆袋',async()=>{
+      const g=await reset();jump(g);g.checkpoints.observeJump(g.anchorX,g.checkpoints.gate.root.y-1,true,50);
+      g.fly(1);check(g.phase==='dead','应失败');check(g.checkpoints.status().bursts===0,'失败不能爆袋');
+    });
+    await test('不是刚好50也触发：48→53，后续100和150依次出现',async()=>{
+      const g=await reset(48);jump(g);simulateJump(g);check(g.checkpoints.status().bursts===1,'48→53应爆袋');
+      for (const m of [100,150]) {
+        g.heightMeters=m-1;g.perfectStreak=3;g.updateHeight();g.prepareCheckpoint();
+        g.placeBlock(g.mover,g.anchorX+1000,g.stackBottom(g.support));g.mover.vx=0;await delay(320);
+        check(g.checkpoints.status().label===m,'袋子数字应为'+m);
+        g.placeBlock(g.mover,g.anchorX,g.stackBottom(g.support));g.mover.vx=0;
+        jump(g);simulateJump(g);check(g.checkpoints.status().nextMeters===m+50,'应推进到下一个 checkpoint');
+      }
+      check(g.checkpoints.status().bursts===3,'三个里程碑应恰好三次爆袋');
+    });
+    await test('暂停及恢复倒计时不推进爆袋动画',async()=>{
+      const g=await reset();g.checkpoints.preview(g.anchorX,g.player.node.y-150);
+      await delay(120);g.pauseButton.paused=true;g.freezePlay();
+      const root=Array.from(g.checkpoints.effects).find(x=>x.list?.some(child=>child.type==='Container') && x!==g.checkpoints.gate.root);
+      const bag=root.list.find(x=>x.type==='Container');const angle=bag.angle;
+      await delay(150);check(bag.angle===angle,'暂停应冻结');
+      g.startResumeCountdown();await delay(150);check(bag.angle===angle,'恢复倒计时应保持冻结');
+      g.clearResumeCountdown();g.unfreezePlay();await delay(1300);
+    });
+    await test('重新开始重置50米且旧特效对象清理',async()=>{
+      const g=await reset();const old=g.checkpoints;g.checkpoints.preview(g.anchorX,g.player.node.y-100);
+      await reset(0,0);check(old.effects.size===0,'旧场景特效应清理');
+      check(g.checkpoints.status().nextMeters===50,'新一局应从50开始');check(g.checkpoints.status().bursts===0,'新一局无爆袋');
+    });
+    report({passed:results.length,results});
+  } catch(error) {report({failed:String(error),results});}
+};
+await delay(1800);report('就绪，可以显示 checkpoint 或运行真实场景测试');
+</script></body></html>

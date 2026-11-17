@@ -1,0 +1,13 @@
+{
+  "passed": 7,
+  "tests": [
+    "actual spawnMover emits selected cosmetic as a normal box with original geometry",
+    "actual special mover generation never draws a cosmetic texture",
+    "unlocked but unchecked skin cannot spawn in the actual scene",
+    "cosmetic normal landing preserves scoring and never grants a special pickup",
+    "accelerated cosmetic box uses the existing 1.3x snapshot and speed visuals",
+    "spring ten automatic boxes may share cosmetic pool but stay ordinary and consume no boost charges",
+    "default yellow remains reachable while a skin is selected"
+  ],
+  "visualBrowserPlaytest": false
+}

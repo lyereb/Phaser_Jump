@@ -1,0 +1,6 @@
+In-app Browser JS state was preserved. Completed actions were not rolled back; refresh stale UI handles and continue only the remaining work.
+{"code":"NAVIGATION_FAILED","method":"browser_snapshot","callIndex":1,"nextAction":"inspect_before_retry"}
+ERROR NAVIGATION_FAILED
+{"control":{"documentRevision":"rev_31b39959-15e2-42ee-ae0f-a2d7bde31495","error":{"code":"NAVIGATION_FAILED","retryable":false},"requiresSnapshot":false,"status":"error","tabId":"tab_2922750c-a994-40a9-b69e-e4e8860454cd"},"kind":"error","page":{"contentTrust":"untrusted","url":"http://127.0.0.1:8080/.work/level-hud/validation.html?layout=vertical"},"schema":"manus.browser/v1","warnings":["ERR_CONNECTION_REFUSED (-102)"]}
+ERROR NAVIGATION_FAILED
+{"control":{"documentRevision":"rev_31b39959-15e2-42ee-ae0f-a2d7bde31495","error":{"code":"NAVIGATION_FAILED","retryable":false},"requiresSnapshot":false,"status":"error","tabId":"tab_2922750c-a994-40a9-b69e-e4e8860454cd"},"kind":"error","page":{"contentTrust":"untrusted","url":"http://127.0.0.1:8080/.work/level-hud/validation.html?layout=vertical"},"schema":"manus.browser/v1","warnings":["ERR_CONNECTION_REFUSED (-102)"]}

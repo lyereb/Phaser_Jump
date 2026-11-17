@@ -1,0 +1,85 @@
+--- main.log: 187 lines; matched context ---
+128: [2026-11-11 13:42:14.026] [info]  [INFO] [ConnectivityMonitorService] signal=focus
+129: [2026-11-11 13:46:43.403] [info]  [INFO] [ConnectivityMonitorService] signal=focus
+130: [2026-11-11 13:47:04.345] [info]  [INFO] [ConnectivityMonitorService] signal=focus
+--- operator.log: 954 lines; matched context ---
+859: 2026/11/11 14:23:09 [skill] official sync failed: data-api: download skill data-api: Get request failed: remote error: tls: handshake failure
+860: 2026/11/11 14:23:09 [skill] official sync failed: data-backup-restoration: download skill data-backup-restoration: Get request failed: remote error: tls: handshake failure
+861: 2026/11/11 14:23:09 [skill] official sync failed: imagegen: download skill imagegen: Get request failed: remote error: tls: handshake failure
+862: 2026/11/11 14:23:09 [skill] official sync failed: tailscale-network: download skill tailscale-network: Get request failed: remote error: tls: handshake failure
+863: 2026/11/11 14:23:09 [skill] official sync failed: git-attribution: download skill git-attribution: Get request failed: remote error: tls: handshake failure
+864: 2026/11/11 14:23:09 [skill] official sync failed: github-integration: download skill github-integration: Get request failed: remote error: tls: handshake failure
+865: 2026/11/11 14:23:09 [skill] official sync failed: google-workspace-integration: download skill google-workspace-integration: Get request failed: remote error: tls: handshake failure
+866: 2026/11/11 14:23:09 [skill] official sync failed: payment: download skill payment: Get request failed: remote error: tls: handshake failure
+867: 2026/11/11 14:23:09 [skill] official sync failed: session-self-config: download skill session-self-config: Get request failed: remote error: tls: handshake failure
+868: 2026/11/11 14:23:09 [skill] official sync failed: support-policy: download skill support-policy: Get request failed: remote error: tls: handshake failure
+869: 2026/11/11 14:23:09 [skill] official sync failed: touchpoint-contacts: download skill touchpoint-contacts: Get request failed: remote error: tls: handshake failure
+870: 2026/11/11 14:23:09 [skill] official sync failed: video-generation: download skill video-generation: Get request failed: remote error: tls: handshake failure
+871: 2026/11/11 14:24:04 [skill] official sync applied: version="1794378239287" results=38 failed=27 changed=false err=""
+872: 2026/11/11 14:24:04 [skill] official sync failed: music-prompter: download skill music-prompter: Get request failed: remote error: tls: handshake failure
+873: 2026/11/11 14:24:04 [skill] official sync failed: skill-creator: download skill skill-creator: Get request failed: remote error: tls: handshake failure
+874: 2026/11/11 14:24:04 [skill] official sync failed: tts-prompter: download skill tts-prompter: Get request failed: remote error: tls: handshake failure
+875: 2026/11/11 14:24:04 [skill] official sync failed: typst-pdf-maker: download skill typst-pdf-maker: Get request failed: remote error: tls: handshake failure
+876: 2026/11/11 14:24:04 [skill] official sync failed: gws-best-practices: download skill gws-best-practices: Get request failed: remote error: tls: handshake failure
+877: 2026/11/11 14:24:04 [skill] official sync failed: manus-api: download skill manus-api: Get request failed: remote error: tls: handshake failure
+878: 2026/11/11 14:24:04 [skill] official sync failed: persistent-computing: download skill persistent-computing: Get request failed: remote error: tls: handshake failure
+879: 2026/11/11 14:24:04 [skill] official sync failed: manus-config: download skill manus-config: Get request failed: remote error: tls: handshake failure
+880: 2026/11/11 14:24:04 [skill] official sync failed: automation-and-scheduling: download skill automation-and-scheduling: Get request failed: remote error: tls: handshake failure
+881: 2026/11/11 14:24:04 [skill] official sync failed: imagegen: download skill imagegen: Get request failed: remote error: tls: handshake failure
+882: 2026/11/11 14:24:04 [skill] official sync failed: builtin-llm-models: download skill builtin-llm-models: Get request failed: remote error: tls: handshake failure
+883: 2026/11/11 14:24:04 [skill] official sync failed: read-special-images: download skill read-special-images: Get request failed: remote error: tls: handshake failure
+884: 2026/11/11 14:24:04 [skill] official sync failed: finance-pro-playbooks: download skill finance-pro-playbooks: Get request failed: remote error: tls: handshake failure
+885: 2026/11/11 14:24:04 [skill] official sync failed: data-analysis: download skill data-analysis: Get request failed: remote error: tls: handshake failure
+886: 2026/11/11 14:24:04 [skill] official sync failed: deep-research: download skill deep-research: Get request failed: remote error: tls: handshake failure
+887: 2026/11/11 14:24:04 [skill] official sync failed: image-processing: download skill image-processing: Get request failed: remote error: tls: handshake failure
+888: 2026/11/11 14:24:04 [skill] official sync failed: data-api: download skill data-api: Get request failed: remote error: tls: handshake failure
+889: 2026/11/11 14:24:04 [skill] official sync failed: data-backup-restoration: download skill data-backup-restoration: Get request failed: remote error: tls: handshake failure
+890: 2026/11/11 14:24:04 [skill] official sync failed: tailscale-network: download skill tailscale-network: Get request failed: remote error: tls: handshake failure
+891: 2026/11/11 14:24:04 [skill] official sync failed: git-attribution: download skill git-attribution: Get request failed: remote error: tls: handshake failure
+892: 2026/11/11 14:24:04 [skill] official sync failed: github-integration: download skill github-integration: Get request failed: remote error: tls: handshake failure
+893: 2026/11/11 14:24:04 [skill] official sync failed: google-workspace-integration: download skill google-workspace-integration: Get request failed: remote error: tls: handshake failure
+894: 2026/11/11 14:24:04 [skill] official sync failed: payment: download skill payment: Get request failed: remote error: tls: handshake failure
+895: 2026/11/11 14:24:04 [skill] official sync failed: session-self-config: download skill session-self-config: Get request failed: remote error: tls: handshake failure
+896: 2026/11/11 14:24:04 [skill] official sync failed: support-policy: download skill support-policy: Get request failed: remote error: tls: handshake failure
+897: 2026/11/11 14:24:04 [skill] official sync failed: touchpoint-contacts: download skill touchpoint-contacts: Get request failed: remote error: tls: handshake failure
+898: 2026/11/11 14:24:04 [skill] official sync failed: video-generation: download skill video-generation: Get request failed: remote error: tls: handshake failure
+899: 2026/11/11 14:26:42 [skill] official sync applied: version="1794378395012" results=38 failed=27 changed=false err=""
+900: 2026/11/11 14:26:42 [skill] official sync failed: music-prompter: download skill music-prompter: Get request failed: remote error: tls: handshake failure
+901: 2026/11/11 14:26:42 [skill] official sync failed: skill-creator: download skill skill-creator: Get request failed: remote error: tls: handshake failure
+902: 2026/11/11 14:26:42 [skill] official sync failed: tts-prompter: download skill tts-prompter: Get request failed: remote error: tls: handshake failure
+903: 2026/11/11 14:26:42 [skill] official sync failed: typst-pdf-maker: download skill typst-pdf-maker: Get request failed: remote error: tls: handshake failure
+904: 2026/11/11 14:26:42 [skill] official sync failed: gws-best-practices: download skill gws-best-practices: Get request failed: remote error: tls: handshake failure
+905: 2026/11/11 14:26:42 [skill] official sync failed: imagegen: download skill imagegen: Get request failed: remote error: tls: handshake failure
+906: 2026/11/11 14:26:42 [skill] official sync failed: manus-api: download skill manus-api: Get request failed: remote error: tls: handshake failure
+907: 2026/11/11 14:26:42 [skill] official sync failed: persistent-computing: download skill persistent-computing: Get request failed: remote error: tls: handshake failure
+908: 2026/11/11 14:26:42 [skill] official sync failed: manus-config: download skill manus-config: Get request failed: remote error: tls: handshake failure
+909: 2026/11/11 14:26:42 [skill] official sync failed: automation-and-scheduling: download skill automation-and-scheduling: Get request failed: remote error: tls: handshake failure
+910: 2026/11/11 14:26:42 [skill] official sync failed: builtin-llm-models: download skill builtin-llm-models: Get request failed: remote error: tls: handshake failure
+911: 2026/11/11 14:26:42 [skill] official sync failed: read-special-images: download skill read-special-images: Get request failed: remote error: tls: handshake failure
+912: 2026/11/11 14:26:42 [skill] official sync failed: finance-pro-playbooks: download skill finance-pro-playbooks: Get request failed: remote error: tls: handshake failure
+913: 2026/11/11 14:26:42 [skill] official sync failed: data-analysis: download skill data-analysis: Get request failed: remote error: tls: handshake failure
+914: 2026/11/11 14:26:42 [skill] official sync failed: deep-research: download skill deep-research: Get request failed: remote error: tls: handshake failure
+915: 2026/11/11 14:26:42 [skill] official sync failed: image-processing: download skill image-processing: Get request failed: remote error: tls: handshake failure
+916: 2026/11/11 14:26:42 [skill] official sync failed: data-api: download skill data-api: Get request failed: remote error: tls: handshake failure
+917: 2026/11/11 14:26:42 [skill] official sync failed: data-backup-restoration: download skill data-backup-restoration: Get request failed: remote error: tls: handshake failure
+918: 2026/11/11 14:26:42 [skill] official sync failed: tailscale-network: download skill tailscale-network: Get request failed: remote error: tls: handshake failure
+919: 2026/11/11 14:26:42 [skill] official sync failed: git-attribution: download skill git-attribution: Get request failed: remote error: tls: handshake failure
+920: 2026/11/11 14:26:42 [skill] official sync failed: github-integration: download skill github-integration: Get request failed: remote error: tls: handshake failure
+921: 2026/11/11 14:26:42 [skill] official sync failed: google-workspace-integration: download skill google-workspace-integration: Get request failed: remote error: tls: handshake failure
+922: 2026/11/11 14:26:42 [skill] official sync failed: payment: download skill payment: Get request failed: remote error: tls: handshake failure
+923: 2026/11/11 14:26:42 [skill] official sync failed: session-self-config: download skill session-self-config: Get request failed: remote error: tls: handshake failure
+924: 2026/11/11 14:26:42 [skill] official sync failed: support-policy: download skill support-policy: Get request failed: remote error: tls: handshake failure
+925: 2026/11/11 14:26:42 [skill] official sync failed: touchpoint-contacts: download skill touchpoint-contacts: Get request failed: remote error: tls: handshake failure
+926: 2026/11/11 14:26:42 [skill] official sync failed: video-generation: download skill video-generation: Get request failed: remote error: tls: handshake failure
+927: 2026/11/11 14:26:43 INFO [Server] Reusing existing MCP connection server_name=webdev-mcp
+937: 2026/11/11 14:38:50 terminal finish action=dta_14af471a8a9da906e490181e08c056fd53d9f5e6d58667bb745485ab5ed46f07 terminal=dt_70eb5b1c2d94b8e497d0b4584b343e36 exit_code=0 lines=6
+938: 2026/11/11 14:40:48 INFO [Server] Reusing existing MCP connection server_name=handoff
+939: 2026/11/11 14:40:48 INFO [Server] Reusing existing MCP connection server_name=handoff
+940: 2026/11/11 14:40:48 terminal run action=dta_9bc795c9390075c92197181756f572c6b4b199dc22dd04d8e6c6846c108b8b29 terminal=dt_70eb5b1c2d94b8e497d0b4584b343e36 command_len=166 exec_dir=
+944: 2026/11/11 14:40:50 terminal finish action=dta_8eee7785582966e92fe2f2b550d76de6b530369c5d85a9d982838704516145b0 terminal=dt_70eb5b1c2d94b8e497d0b4584b343e36 exit_code=0 lines=136
+945: 2026/11/11 14:41:28 INFO [Server] Reusing existing MCP connection server_name=handoff
+946: 2026/11/11 14:41:29 INFO [Server] Reusing existing MCP connection server_name=handoff
+947: 2026/11/11 14:41:37 terminal dt_98ad4f21152dc8aafc7cef0bed5c6403 created: at=2026-11-11T06:41:37.2957809Z shell="powershell.exe" backend=*terminal.windowsPtyHandle pid=19052 interactive=false wrapped=false force_pipe=false
+948: 2026/11/11 14:41:37 terminal run action=dta_9055ee6dc6887b59f6b8557600b4268f76288d2ee1a6195ef9f123eb023bbf22 terminal=dt_98ad4f21152dc8aafc7cef0bed5c6403 command_len=841 exec_dir=
+949: 2026/11/11 14:41:38 terminal finish action=dta_9055ee6dc6887b59f6b8557600b4268f76288d2ee1a6195ef9f123eb023bbf22 terminal=dt_98ad4f21152dc8aafc7cef0bed5c6403 exit_code=0 lines=282
+950: 2026/11/11 14:42:37 terminal dt_74b5dbf36fd07e652ae511f2443d7e6a created: at=2026-11-11T06:42:37.805793Z shell="powershell.exe" backend=*terminal.windowsPtyHandle pid=15952 interactive=false wrapped=false force_pipe=false

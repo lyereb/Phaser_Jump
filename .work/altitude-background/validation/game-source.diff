@@ -1,0 +1,98 @@
+--- 
+
++++ 
+
+@@ -14,7 +14,8 @@
+
+ import { MeterDigits } from '../letters';
+ import { ReturnButton } from '../returnButton';
+ import { StarBurst } from '../stars';
+-import { bindResize, coverImage } from '../layout';
++import { bindResize } from '../layout';
++import { AltitudeBackground } from '../altitudeBackground';
+ import { PLAYER_ART_FEET, PLAYER_ART_HEIGHT, PLAYER_ART_TOP, PLAYER_HIT_ANIM, PLAYER_IDLE_ANIM, PLAYER_JUMP_ANIM } from '../player';
+ import { RETURN_CONFIRM_SCENE } from './ReturnConfirmation';
+ import type { RoundSummary } from './GameOver';
+@@ -173,7 +174,8 @@
+
+ 
+ export class Game extends Scene
+ {
+-    private background: Phaser.GameObjects.Image;
++    private background: Phaser.GameObjects.Container;
++    private altitudeBackground: AltitudeBackground;
+     private player: Actor;
+     private stack: Block[] = [];
+     private mover: Block | null = null;
+@@ -272,9 +274,8 @@
+
+         this.cameras.main.setBackgroundColor(COLOR_BG);
+         this.cameras.main.roundPixels = true;
+ 
+-        this.background = this.add.image(0, 0, 'background')
+-            .setScrollFactor(0)
+-            .setDepth(DEPTH_BACKGROUND);
++        this.altitudeBackground = new AltitudeBackground(this, DEPTH_BACKGROUND);
++        this.background = this.altitudeBackground.root;
+ 
+         const base = this.createBlock({ ...BASE_ART }, false);
+ 
+@@ -343,6 +344,7 @@
+
+         this.input.on('pointerdown', this.onPointerDown, this);
+         this.events.once('shutdown', () =>
+         {
++            this.altitudeBackground.destroy();
+             this.input.off('pointerdown', this.onPointerDown, this);
+             this.overviewDelayTimer?.remove(false);
+             this.overviewDelayTimer = undefined;
+@@ -385,6 +387,7 @@
+
+         {
+             this.followCamera(false);
+             this.checkpoints.layout();
++            this.altitudeBackground.update(this.meters(), delta);
+         }
+     }
+ 
+@@ -490,6 +493,7 @@
+
+         if (!this.grounded && this.bottom(this.player.node) > this.bottom(this.body(this.support)) + 36)
+         {
+             this.phase = 'dead';
++            this.altitudeBackground?.freeze();
+             this.hint.setVisible(false);
+             this.player.sprite.play(PLAYER_HIT_ANIM);
+             playSfx(this, 'fail');
+@@ -697,6 +701,7 @@
+
+         const sign = dir === 0 ? 1 : Math.sign(dir);
+ 
+         this.phase = 'dead';
++        this.altitudeBackground?.freeze();
+         this.grounded = false;
+         this.hint.setVisible(false);
+         this.player.vx = sign * 540;
+@@ -1247,19 +1252,10 @@
+
+         this.anchorX = this.body(base).x;
+     }
+ 
+-    /** Screen-locked art is still multiplied by the camera zoom, so grow it back to cover the view. */
++    /** Keep the same background crop during failure overview zoom; score progress stays frozen. */
+     private layoutBackground ()
+     {
+-        const { width, height } = this.scale;
+-        const zoom = this.cameras.main.zoom;
+-
+-        coverImage(this.background, width, height);
+-        if (zoom > 0 && zoom < 1)
+-        {
+-            // A couple of pixels past the edges, so the clear color cannot show through subpixel rounding.
+-            const bleed = 1 + 4 / Math.min(width, height);
+-            this.background.setScale(this.background.scaleX / zoom * bleed, this.background.scaleY / zoom * bleed);
+-        }
++        this.altitudeBackground?.layout();
+     }
+ 
+     private layout ()

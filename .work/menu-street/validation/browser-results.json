@@ -1,0 +1,28 @@
+{
+  "passed": 14,
+  "checks": [
+    "UI/logo/box/rider layout unchanged",
+    "real scene background advances while rider idle",
+    "Settings pauses/resumes background",
+    "WeeklyRanking pauses/resumes background",
+    "SkinShop pauses/resumes background",
+    "long-running cycles keep fixed object/texture counts",
+    "landscape projection remains centered",
+    "wide-screen near-plane clips passed house fronts without invalid vertices",
+    "original menu jump/landing still works",
+    "start launches original game and cleans background",
+    "returning to menu recreates one clean pool",
+    "real Canvas renderer uses projected textured fallback",
+    "Canvas pause and resume preserve travel",
+    "Canvas cleanup is idempotent and restart does not leak texture"
+  ],
+  "errors": [],
+  "renderers": [
+    "WebGL (2)",
+    "Canvas (1)"
+  ],
+  "counts": [
+    156,
+    36
+  ]
+}

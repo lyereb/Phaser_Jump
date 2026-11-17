@@ -1,0 +1,33 @@
+{
+  "passed": 27,
+  "tests": [
+    "visible failed actor falls with the original camera and no zoom timer",
+    "whole actor must cross below viewport before the one-second countdown",
+    "zoom is still absent after 999ms and begins exactly at the next millisecond",
+    "drop is scheduled once and the fallen actor cannot return during overview",
+    "leaving the scene before countdown completion does not begin overview",
+    "new round cancels old delay and restores initial camera and fall state",
+    "overview preserves tower nodes even above HUD depth and hides all decorations",
+    "full tower and ground margins fit the final overview frame",
+    "zoom completion retains 1-second hold then launches settlement and pauses old game",
+    "settlement launch is idempotent and frozen simulation awards nothing",
+    "resize snaps final tower framing without scheduling a second hold or removing skin nodes",
+    "result overlay has transparent camera and no replacement city background",
+    "top-left hide button hides card and shade without changing scene",
+    "screen press restores the same result without retrying or changing summary",
+    "release from reveal gesture cannot activate the retry button",
+    "repeated hide and show never resumes game or adds navigation",
+    "hidden result cannot retry or return even via delayed or direct button actions",
+    "right-click does not reveal or navigate, primary input still works",
+    "retry stops old paused Game before starting fresh Game and shutdown never stops fresh game",
+    "menu choice cleans old paused Game and leaves no second navigation",
+    "external settlement shutdown also cleans orphaned paused Game",
+    "old button-down released over blank area is cancelled before hide and cannot pair with reveal-up",
+    "hiding cancels a queued bounce action even if result is restored before its timer fires",
+    "resize during failed fall and countdown never snaps the camera back to the fallen actor",
+    "standalone zero-result page retains background and normal two-button navigation",
+    "result statistics sanitize impossible numbers and hidden mode never alters them",
+    "hide, retry, menu and reveal hit areas fit portrait and landscape and persist hidden on resize"
+  ],
+  "browserVisualAcceptance": false
+}
