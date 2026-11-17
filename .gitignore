@@ -36,3 +36,4 @@ __pycache__/
 # .work 只保留各任务的原始素材 raw/（scripts/prepare_*.py 依赖），其余为备份/验证/构建等临时文件
 .work/*/*
 !.work/*/raw/
+*.tmp
